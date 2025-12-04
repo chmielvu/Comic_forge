@@ -53,6 +53,7 @@ export interface ComicFace {
   isLoading: boolean;
   pageIndex?: number;
   isDecisionPage?: boolean;
+  audioBase64?: string; // Stored audio data
 }
 
 export interface Beat {

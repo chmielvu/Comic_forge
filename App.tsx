@@ -1,20 +1,20 @@
 
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useRef } from 'react';
+import React, { useRef, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import jsPDF from 'jspdf';
-import { BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, ComicFace, Beat, Archetype } from './types';
+import { BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, GATE_PAGE, ComicFace, Beat, Archetype } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
 import { SoundManager } from './SoundEngine';
 import { LoreEngine } from './LoreEngine';
 import { VisualBible } from './VisualBible';
 import { useGameStore } from './store';
+import { TTSService } from './TTSService';
 
 // --- Constants ---
 const MODEL_IMAGE_GEN_NAME = "gemini-2.5-flash-image"; 
@@ -36,7 +36,6 @@ const App: React.FC = () => {
   const setHero = useGameStore(s => s.setHero);
   const setFriend = useGameStore(s => s.setFriend);
   const setSoundEnabled = useGameStore(s => s.setSoundEnabled);
-  const setLedger = useGameStore(s => s.setLedger);
   const updateLedger = useGameStore(s => s.updateLedger);
   const setComicFaces = useGameStore(s => s.setComicFaces);
   const updateFaceState = useGameStore(s => s.updateFaceState);
@@ -49,6 +48,14 @@ const App: React.FC = () => {
   // Local refs for generation tracking only (not state)
   const generatingPages = useRef(new Set<number>());
 
+  // --- Derived State (Memoized) ---
+  // Check if the "Gate Page" (usually page 2, where the story starts) has an image.
+  // This boolean is passed down instead of the whole array to prevent Panel re-renders.
+  const isGatePageReady = useMemo(() => {
+      const gatePage = comicFaces.find(f => f.pageIndex === GATE_PAGE);
+      return !!(gatePage && gatePage.imageUrl && !gatePage.isLoading);
+  }, [comicFaces]);
+
   // --- AI Helpers ---
   const getAI = () => {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -57,7 +64,7 @@ const App: React.FC = () => {
   const handleAPIError = (e: any) => {
     const msg = String(e);
     console.error("API Error:", msg);
-    alert(`An API error occurred. Please check your console for details. Error: ${msg}`);
+    // Alert removed for smoother UX, rely on console/UI fallback
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -224,6 +231,7 @@ EXECUTE GRAPH OF THOUGHTS:
       
       let beat: Beat = { scene: "", choices: [], focus_char: 'Subject', location: 'Void' };
 
+      // 1. Generate Narrative Text First
       if (type === 'cover') {
           // Cover is visual only
       } else if (type === 'back_cover') {
@@ -234,8 +242,27 @@ EXECUTE GRAPH OF THOUGHTS:
       }
 
       useGameStore.getState().updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
-      const url = await generateImage(beat, type);
-      useGameStore.getState().updateFaceState(faceId, { imageUrl: url, isLoading: false });
+
+      // 2. Generate Image AND Audio in Parallel (Efficiency Boost)
+      const imagePromise = generateImage(beat, type);
+      
+      // Only generate audio for story pages with actual text
+      let audioPromise: Promise<string | null> = Promise.resolve(null);
+      if (type === 'story' && (beat.dialogue || beat.caption)) {
+          // Prioritize dialogue for the voice acting, fallback to caption
+          const textToSpeak = beat.dialogue || beat.caption || "";
+          if (textToSpeak) {
+              audioPromise = TTSService.generateSpeech(textToSpeak, beat.focus_char);
+          }
+      }
+
+      const [url, audioData] = await Promise.all([imagePromise, audioPromise]);
+
+      useGameStore.getState().updateFaceState(faceId, { 
+          imageUrl: url, 
+          audioBase64: audioData || undefined,
+          isLoading: false 
+      });
   };
 
   const generateBatch = async (startPage: number, count: number) => {
@@ -275,7 +302,9 @@ EXECUTE GRAPH OF THOUGHTS:
       }
   }
 
-  const launchStory = async (name: string, fear: string) => {
+  // --- Memoized Handlers to prevent re-renders in children ---
+
+  const launchStory = useCallback(async (name: string, fear: string) => {
     SoundManager.init();
     SoundManager.play('success');
     if (useGameStore.getState().soundEnabled) SoundManager.startAmbience();
@@ -292,6 +321,7 @@ EXECUTE GRAPH OF THOUGHTS:
     setComicFaces([coverFace]);
     generatingPages.current.add(0);
 
+    // Initial generation sequence
     generateSinglePage('cover', 0, 'cover').finally(() => generatingPages.current.delete(0));
     
     setTimeout(async () => {
@@ -302,9 +332,9 @@ EXECUTE GRAPH OF THOUGHTS:
         await generateBatch(1, INITIAL_PAGES);
         generateBatch(3, 3);
     }, 2000);
-  };
+  }, []);
 
-  const handleChoice = async (pageIndex: number, choice: string) => {
+  const handleChoice = useCallback(async (pageIndex: number, choice: string) => {
       SoundManager.play('click');
       updateFaceState(`page-${pageIndex}`, { resolvedChoice: choice });
       
@@ -314,16 +344,16 @@ EXECUTE GRAPH OF THOUGHTS:
       if (maxPage + 1 <= TOTAL_PAGES) {
           generateBatch(maxPage + 1, BATCH_SIZE);
       }
-  }
+  }, []);
 
-  const resetApp = () => {
+  const resetApp = useCallback(() => {
       SoundManager.play('click');
       SoundManager.stopAmbience();
       resetStore();
       generatingPages.current.clear();
-  };
+  }, []);
 
-  const downloadPDF = () => {
+  const downloadPDF = useCallback(() => {
     SoundManager.play('click');
     const PAGE_WIDTH = 480;
     const PAGE_HEIGHT = 720;
@@ -337,24 +367,25 @@ EXECUTE GRAPH OF THOUGHTS:
         if (face.imageUrl) doc.addImage(face.imageUrl, 'JPEG', 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
     });
     doc.save('The-Forges-Loom.pdf');
-  };
+  }, []);
 
-  const handleHeroUpload = async (file: File) => {
+  const handleHeroUpload = useCallback(async (file: File) => {
        try { 
          const base64 = await fileToBase64(file); 
          setHero({ base64, desc: "The Subject", name: "Nico", archetype: 'Subject' }); 
          SoundManager.play('success');
        } catch (e) { alert("Subject upload failed"); }
-  };
-  const handleFriendUpload = async (file: File) => {
+  }, []);
+
+  const handleFriendUpload = useCallback(async (file: File) => {
        try { 
          const base64 = await fileToBase64(file); 
          setFriend({ base64, desc: "The Ally", name: "Darius", archetype: 'Ally' }); 
          SoundManager.play('success');
        } catch (e) { alert("Ally upload failed"); }
-  };
+  }, []);
 
-  const handleSheetClick = (index: number) => {
+  const handleSheetClick = useCallback((index: number) => {
       const state = useGameStore.getState();
       if (!state.isStarted) return;
       if (index === 0 && state.currentSheetIndex === 0) return;
@@ -367,9 +398,9 @@ EXECUTE GRAPH OF THOUGHTS:
          setCurrentSheetIndex(prev => prev + 1);
          SoundManager.play('flip');
       }
-  };
+  }, []);
 
-  const handleSoundToggle = (enabled: boolean) => {
+  const handleSoundToggle = useCallback((enabled: boolean) => {
       setSoundEnabled(enabled);
       SoundManager.setMuted(!enabled);
       if (enabled) {
@@ -378,7 +409,12 @@ EXECUTE GRAPH OF THOUGHTS:
       } else {
           SoundManager.stopAmbience();
       }
-  };
+  }, []);
+
+  const handleOpenBook = useCallback(() => {
+      setCurrentSheetIndex(1); 
+      SoundManager.play('flip');
+  }, []);
 
   return (
     <div className="comic-scene">
@@ -400,9 +436,10 @@ EXECUTE GRAPH OF THOUGHTS:
           isSetupVisible={showSetup && !isTransitioning}
           onSheetClick={handleSheetClick}
           onChoice={handleChoice}
-          onOpenBook={() => { setCurrentSheetIndex(1); SoundManager.play('flip'); }}
+          onOpenBook={handleOpenBook}
           onDownload={downloadPDF}
           onReset={resetApp}
+          isGatePageReady={isGatePageReady} 
       />
     </div>
   );

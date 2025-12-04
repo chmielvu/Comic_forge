@@ -5,19 +5,20 @@
 */
 
 import React from 'react';
-import { ComicFace, GATE_PAGE, Archetype } from './types';
+import { ComicFace, Archetype } from './types';
 import { LoadingFX } from './LoadingFX';
+import { SoundManager } from './SoundEngine';
 
 interface PanelProps {
     face?: ComicFace;
-    allFaces: ComicFace[]; // Needed for cover "printing" status
     onChoice: (pageIndex: number, choice: string) => void;
     onOpenBook: () => void;
     onDownload: () => void;
     onReset: () => void;
+    isGatePageReady: boolean; // Replaces allFaces to fix memoization
 }
 
-export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBook, onDownload, onReset }) => {
+const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDownload, onReset, isGatePageReady }) => {
     if (!face) return <div className="w-full h-full bg-[#0a0a0a]" />; // Void color
     if (face.isLoading && !face.imageUrl) return <LoadingFX />;
     
@@ -107,6 +108,25 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
                 />
             )}
             
+            {/* --- AUDIO CONTROL --- */}
+            {face?.audioBase64 && !isFullBleed && (
+                <div className="absolute top-4 right-4 z-50">
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if (face.audioBase64) SoundManager.playVoice(face.audioBase64);
+                        }}
+                        className="bg-black/60 hover:bg-[#7c0a0a] text-[#d4af37] border border-[#d4af37] rounded-full p-3 transition-all transform hover:scale-110 backdrop-blur-sm shadow-lg group-hover:opacity-100 opacity-80"
+                        title="Play Narration"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                        </svg>
+                    </button>
+                </div>
+            )}
+
             {/* --- NARRATIVE LAYERS --- */}
             {!isFullBleed && narrative && voice && (
                 <>
@@ -168,7 +188,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
                  <div className="absolute bottom-24 inset-x-0 flex justify-center z-40">
                      <button 
                         onClick={(e) => { e.stopPropagation(); onOpenBook(); }}
-                        disabled={!allFaces.find(f => f.pageIndex === GATE_PAGE)?.imageUrl}
+                        disabled={!isGatePageReady}
                         className="
                             group relative px-10 py-4 bg-black/60 backdrop-blur-sm border-2 border-[#d4af37] 
                             text-[#d4af37] font-title text-xl md:text-2xl tracking-[0.2em] uppercase
@@ -177,7 +197,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
                         "
                      >
                          <span className="relative z-10 drop-shadow-lg">
-                             {(!allFaces.find(f => f.pageIndex === GATE_PAGE)?.imageUrl) 
+                             {(!isGatePageReady) 
                                 ? `Manifesting...` 
                                 : 'Open The Codex'}
                          </span>
@@ -206,4 +226,33 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
             )}
         </div>
     );
-}
+};
+
+export const Panel = React.memo(PanelComponent, (prevProps, nextProps) => {
+    // Custom Comparator for React.memo
+    // Returns true if props are equal (do NOT re-render)
+    // Returns false if props are different (DO re-render)
+
+    // 1. Check simple booleans/references that come from parent
+    if (prevProps.isGatePageReady !== nextProps.isGatePageReady) return false;
+    
+    // 2. Check Face integrity
+    const pFace = prevProps.face;
+    const nFace = nextProps.face;
+
+    if (pFace === nFace) return true; // Same reference
+    if (!pFace || !nFace) return pFace === nFace; // Handle undefined/nulls
+
+    // Deep check specific fields that affect rendering
+    if (pFace.id !== nFace.id) return false;
+    if (pFace.isLoading !== nFace.isLoading) return false;
+    if (pFace.imageUrl !== nFace.imageUrl) return false;
+    if (pFace.resolvedChoice !== nFace.resolvedChoice) return false;
+    if (pFace.audioBase64 !== nFace.audioBase64) return false;
+    
+    // Check narrative content (dialogue/caption changes)
+    if (pFace.narrative?.dialogue !== nFace.narrative?.dialogue) return false;
+    if (pFace.narrative?.caption !== nFace.narrative?.caption) return false;
+
+    return true; 
+});
