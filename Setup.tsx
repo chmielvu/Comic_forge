@@ -50,8 +50,8 @@ export const Setup: React.FC<SetupProps> = (props) => {
                 <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-[#d4af37]"></div>
 
                 <div className="text-center mb-8">
-                    <h1 className="text-4xl md:text-6xl font-serif tracking-widest text-[#7c0a0a] uppercase mb-2" style={{textShadow: '0 4px 10px black'}}>The Forge's Loom</h1>
-                    <p className="text-sm md:text-base text-gray-400 tracking-[0.2em] uppercase">Codex of the Corrupted Curriculum</p>
+                    <h1 className="text-4xl md:text-6xl font-title tracking-widest text-[#7c0a0a] uppercase mb-2" style={{textShadow: '0 4px 10px black'}}>The Forge's Loom</h1>
+                    <p className="text-sm md:text-base text-gray-400 tracking-[0.2em] uppercase font-comic">Codex of the Corrupted Curriculum</p>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
@@ -59,7 +59,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                     {/* Left: The Subject */}
                     <div className="flex flex-col gap-4">
                         <div className="border-b border-[#4a3626] pb-2 mb-2">
-                            <h2 className="text-xl uppercase tracking-wider text-[#d4af37]">I. The Subject</h2>
+                            <h2 className="text-xl uppercase tracking-wider text-[#d4af37] font-title">I. The Subject</h2>
                             <p className="text-xs text-gray-500 italic">"The raw ore to be refined."</p>
                         </div>
                         
@@ -76,7 +76,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             </div>
                         ) : (
                             <label className="h-32 border border-dashed border-[#4a3626] flex flex-col items-center justify-center cursor-pointer hover:bg-[#222] transition-colors group">
-                                <span className="text-[#7c0a0a] font-bold uppercase tracking-widest group-hover:scale-105 transition-transform">Upload Portrait</span>
+                                <span className="text-[#7c0a0a] font-bold uppercase tracking-widest group-hover:scale-105 transition-transform font-comic">Upload Portrait</span>
                                 <span className="text-xs text-gray-600 mt-2">Front facing, neutral expression</span>
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && props.onHeroUpload(e.target.files[0])} />
                             </label>
@@ -89,7 +89,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     type="text" 
                                     value={subjectName}
                                     onChange={(e) => setSubjectName(e.target.value)}
-                                    className="w-full bg-[#0f0f0f] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none placeholder-gray-700"
+                                    className="w-full bg-[#0f0f0f] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none placeholder-gray-700 font-serif"
                                 />
                             </div>
                             <div>
@@ -98,7 +98,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                                     type="text" 
                                     value={coreFear}
                                     onChange={(e) => setCoreFear(e.target.value)}
-                                    className="w-full bg-[#0f0f0f] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none placeholder-gray-700"
+                                    className="w-full bg-[#0f0f0f] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none placeholder-gray-700 font-serif"
                                 />
                             </div>
                         </div>
@@ -107,7 +107,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                     {/* Right: The Ally */}
                     <div className="flex flex-col gap-4">
                         <div className="border-b border-[#4a3626] pb-2 mb-2">
-                            <h2 className="text-xl uppercase tracking-wider text-[#d4af37]">II. Fragile Ally</h2>
+                            <h2 className="text-xl uppercase tracking-wider text-[#d4af37] font-title">II. Fragile Ally</h2>
                             <p className="text-xs text-gray-500 italic">"A weakness to be exploited."</p>
                         </div>
 
@@ -124,7 +124,7 @@ export const Setup: React.FC<SetupProps> = (props) => {
                             </div>
                         ) : (
                             <label className="h-32 border border-dashed border-[#4a3626] flex flex-col items-center justify-center cursor-pointer hover:bg-[#222] transition-colors group">
-                                <span className="text-gray-500 font-bold uppercase tracking-widest group-hover:text-[#d4af37] transition-colors">Upload Ally (Optional)</span>
+                                <span className="text-gray-500 font-bold uppercase tracking-widest group-hover:text-[#d4af37] transition-colors font-comic">Upload Ally (Optional)</span>
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && props.onFriendUpload(e.target.files[0])} />
                             </label>
                         )}
@@ -139,19 +139,25 @@ export const Setup: React.FC<SetupProps> = (props) => {
                     </div>
                 </div>
 
-                <div className="flex flex-col gap-4">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                        <div className={`w-5 h-5 border border-[#d4af37] flex items-center justify-center ${props.soundEnabled ? 'bg-[#d4af37]' : 'bg-transparent'}`}>
-                            {props.soundEnabled && <span className="text-black font-bold text-xs">X</span>}
+                <div className="flex flex-col gap-4 items-center">
+                    {/* Visual Checkbox */}
+                    <label className="flex items-center gap-4 cursor-pointer group select-none">
+                        <div className={`relative w-6 h-6 border-2 border-[#d4af37] bg-transparent transition-all duration-300 ${props.soundEnabled ? 'shadow-[0_0_15px_rgba(124,10,10,0.6)] border-[#7c0a0a]' : ''}`}>
+                            <div className={`absolute inset-0 bg-[#7c0a0a] transition-transform duration-300 origin-center ${props.soundEnabled ? 'scale-100' : 'scale-0'}`}></div>
+                            {props.soundEnabled && (
+                                <span className="absolute inset-0 flex items-center justify-center text-[#d4af37] font-bold text-lg animate-in zoom-in duration-300">X</span>
+                            )}
                         </div>
                         <input type="checkbox" checked={props.soundEnabled} onChange={(e) => props.onSoundChange(e.target.checked)} className="hidden" />
-                        <span className="text-gray-400 uppercase text-xs tracking-widest group-hover:text-white transition-colors">Enable Auditory Hallucinations</span>
+                        <span className={`text-sm uppercase tracking-[0.2em] transition-colors font-comic ${props.soundEnabled ? 'text-[#d4af37] shadow-glow' : 'text-gray-500 group-hover:text-gray-300'}`}>
+                            Enable Auditory Hallucinations
+                        </span>
                     </label>
 
                     <button 
                         onClick={() => props.onLaunch(subjectName, coreFear)} 
                         disabled={!props.hero || props.isTransitioning}
-                        className="w-full py-4 bg-[#7c0a0a] text-black hover:bg-[#900] disabled:bg-[#333] disabled:text-gray-600 disabled:cursor-not-allowed transition-all uppercase tracking-[0.25em] font-bold text-lg border border-black hover:border-[#d4af37] relative overflow-hidden"
+                        className="w-full py-4 bg-[#7c0a0a] text-black hover:bg-[#900] disabled:bg-[#333] disabled:text-gray-600 disabled:cursor-not-allowed transition-all uppercase tracking-[0.25em] font-bold text-xl border border-black hover:border-[#d4af37] relative overflow-hidden font-title shadow-[0_0_20px_rgba(0,0,0,0.5)]"
                     >
                         {props.isTransitioning ? 'ENTERING THE FORGE...' : 'BEGIN CURRICULUM'}
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-1000"></div>

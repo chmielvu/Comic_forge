@@ -75,19 +75,24 @@ ${VOCAL_PROFILES}
 ${LoreEngine.interpretLedger(ledger)}
 
 # INSTRUCTION FOR AI (GRAPH OF THOUGHTS):
-Before generating the JSON, you must perform a "Reasoning Trace" (thought_chain) to ensure narrative continuity and psychological depth.
+Before generating the JSON, you must perform a "Reasoning Trace" (thought_chain) to ensure narrative continuity and psychological depth. This chain should be a narrative graph: [Current State] -> [Action/Strategy] -> [Outcome].
 
-1. ANALYZE STATE: Look at the Subject's Trauma/Hope. How does the Focus Character react to this? (e.g., Petra attacks Defiance; Calista exploits Brokenness).
-2. SELECT STRATEGY: Choose a mechanism (Gaslighting, Kinetic Strike, Public Humiliation) based on Yala's Axioms.
-3. DRAFT NARRATIVE: Write the beat using the sensory details of "Renaissance Brutalism" (damp stone, velvet, sweat, ozone).
+1. GRAPH ANALYSIS: Look at the Subject's Ledger.
+   - If Trauma is high, focus on 'The Systemic Shock'.
+   - If Hope is high, focus on 'The Break'.
+2. SELECT STRATEGY: Choose a mechanism based on Yala's Axioms.
+   - Gaslighting? Kinetic Strike? Public Humiliation?
+3. DRAFT NARRATIVE:
+   - Dialogue: Focus on subtext and power dynamics. Less exposition, more threat.
+   - Visuals: Use the "Renaissance Brutalism" keywords (damp stone, velvet, sweat, ozone).
 
 # OUTPUT FORMAT (JSON ONLY):
 {
-  "thought_chain": "Analysis: Subject is defiant. Strategy: Petra will use kinetic force to humble him. Axiom: Bio-Computational Engine.",
-  "caption": "Second-person narration (max 30 words). Focus on somatic horror (nausea, cold sweat).",
-  "dialogue": "Character speech (max 25 words). STRICTLY follow Vocal Profiles.",
-  "scene": "Visual description for the artist. Focus on 'The Gaze' and 'The Pose'.",
-  "choices": ["Choice A", "Choice B"] (Only if decision page),
+  "thought_chain": "[State: Defiant] -> [Strategy: Petra uses kinetic force to humble] -> [Outcome: Physical collapse, psychological anchor formed]. Axiom: Bio-Computational Engine.",
+  "caption": "Second-person narration (max 40 words). Focus on somatic horror (nausea, cold sweat, the white flash).",
+  "dialogue": "Character speech (max 30 words). STRICTLY follow Vocal Profiles. No generic villain tropes.",
+  "scene": "Visual description for the artist. Focus on 'The Gaze' and 'The Pose'. Include lighting details (rim light, deep shadow).",
+  "choices": ["Choice A (Defy)", "Choice B (Submit)"] (Only if decision page),
   "ledger_impact": {"hope": -5, "trauma": +10}
 }
         `;

@@ -1,3 +1,4 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -6,32 +7,22 @@
 import { Beat, Archetype } from './types';
 
 /* ===================================================================
-   VISUAL MANDATE v8 – Rebuilt for maximum fidelity and atmosphere
+   VISUAL MANDATE v9 – RENAISSANCE BRUTALISM & KGoT ALIGNMENT
    =================================================================== */
 const VISUAL_MANDATE = {
-  // Hyper-specific, lens-first, Caravaggio/Rutkowski hybrid.
   style: "masterpiece, best quality, ultra-detailed oil painting texture in the style of Caravaggio and Greg Rutkowski, baroque brutalist vampire noir, dark erotic academia, cinematic color grading, film grain, 50mm prime lens f/1.4, shallow depth of field, hyper-real tactile fabrics with visible thread count and strain lines",
 
-  // Lighting rewritten with obsession for rim-light + volumetrics
-  lighting: "single dramatic key light (flickering amber gaslamp OR cold surgical overhead), extreme chiaroscuro, hard rim lighting catching sweat beads and lace edges, dense volumetric fog in background, god rays, caustics on wet skin, deep inky shadows pooling in cleavage, throat hollows and skirt slits",
+  // Specific directives from the Architect
+  environment_directives: "raw concrete chamber, leather books, surgical tools, faint wine goblet, damp stone walls, weeping masonry, creeping mold in corners, cold tile floors",
+  
+  character_directives: "Female characters: White shirts half-unbuttoned revealing/cleavage, high slits, sheer stockings, velvet robes, imperious posture. Male characters: Disheveled, sweating, open shirts, bruises blooming across ribs, look of exhausted submission. Predatory expressions on faculty.",
+  
+  lighting_directives: "Single gaslight source, deep shadows, volumetric fog, rim lighting on sweat/skin, extreme chiaroscuro, cavernous darkness swallowing the edges.",
 
   mood: "predatory intimacy, suffocating dread, weaponized sexuality, clinical amusement, voyeuristic tension, power imbalance frozen mid-breath",
 
-  // Semantic negatives baked as positive framing
-  palette_and_atmosphere: "exclusively desaturated palette: Charcoal #2B2B2B, Stone Gray #6E6E6E, Deep Umber, Blood Crimson #7C0A0A, Tarnished Gold #A77A3A. No bright colors, no cheerful expressions, no natural daylight, no modern architecture, no soft focus, no anime influence, no 3d render artifacts, no flat lighting, no fantasy armor or capes",
-
-  // Explicit directives for identity lock
-  directives: "Female authority figures always white shirts half-unbuttoned revealing/cleavage, high slits, sheer stockings, velvet robes. Male subjects: disheveled, sweating, open shirts, bruises blooming across ribs, look of exhausted submission. Predatory expressions on faculty."
+  palette: "exclusively desaturated palette: Charcoal #2B2B2B, Stone Gray #6E6E6E, Deep Umber, Blood Crimson #7C0A0A, Tarnished Gold #A77A3A."
 } as const;
-
-/* ===================================================================
-   LIGHTING PRESETS
-   =================================================================== */
-const LIGHTING_PRESETS = {
-  Harsh: "85mm lens, harsh top-down surgical lamp 5600K, hard cool rim light from behind, sweat droplets sparkle like diamonds, eyes catch tiny catchlight reflections, deep black shadows swallow background",
-  Intimate: "50mm lens f/1.4, warm 2800K gaslamp battling cool blue moonlight through cracked window, golden rim light tracing lace edges and throat, velvet fog, skin has oily specular sheen",
-  Moody: "35mm lens, almost pure rim lighting only, subject half-silhouetted against thick volumetric fog, single blood-crimson practical light catches eyes and parted lips"
-};
 
 /* ===================================================================
    CHARACTER DNA v8
@@ -75,9 +66,6 @@ const CHARACTER_DNA: Record<Archetype, string> = {
   'Penitent': "Male Subject, mid-20s, guilt-ridden, seeking absolution. Gaunt face, downcast eyes, rough-hewn hair. Attire: simple, coarse tunic, bare feet, visible rope marks on wrists. Body: posture of humility and self-punishment."
 };
 
-/* ===================================================================
-   LOCATION DNA – now with physics-accurate descriptors
-   =================================================================== */
 const LOCATION_DNA: Record<string, string> = {
   'Calibration Chamber': "brutalist concrete rotunda, 40-foot ceiling, central black granite slab with worn leather restraints, single overhead surgical lamp on articulated arm, dust motes floating in beam, cold blue-white light, faint echo, cracked observation window high above",
   'Confessional': "small oak-paneled study, heavy burgundy velvet armchairs, wall of ancient leather books, single amber gaslamp on brass chain, thick persian rug muffling footsteps, incense smoke curling",
@@ -91,38 +79,28 @@ const LOCATION_DNA: Record<string, string> = {
   'Isolation Ward': "lightless, soundproofed padded cell, claustrophobic, no windows, heavy steel door, silence broken only by one's own ragged breathing, sensory deprivation.",
 };
 
-/* ===================================================================
-   FINAL PROMPT CONSTRUCTOR – Nano Banana multi-turn optimized
-   =================================================================== */
 export const VisualBible = {
-  // The systemPrompt method was removed as `NANO_BANANA_SYSTEM` was undefined and
-  // its purpose within VisualBible was unclear for image generation.
-  // The prompt construction for visuals is handled by constructPrompt.
-
   constructPrompt: (beat: Beat, heroPresent: boolean, friendPresent: boolean): string => {
-    const focusDNA = CHARACTER_DNA[beat.focus_char as Archetype]; // Explicit cast for safety
+    const focusDNA = CHARACTER_DNA[beat.focus_char as Archetype];
     const location = LOCATION_DNA[beat.location] || LOCATION_DNA['Calibration Chamber'];
 
-    let lighting = LIGHTING_PRESETS.Moody;
-    if (["Calibration Chamber", "Research Wing", "Isolation Ward"].includes(beat.location)) lighting = LIGHTING_PRESETS.Harsh;
-    if (["Confessional", "Bathhouse", "Infirmary"].includes(beat.location)) lighting = LIGHTING_PRESETS.Intimate;
-
-    // ─── NANO BANANA COMPOSITIONAL TRINITY (X-proven structure) ───
+    // ─── THE FORGE COMPOSITIONAL MATRIX ───
     return `
 ${VISUAL_MANDATE.style}
 
-ENVIRONMENT & LIGHTING:
+ENVIRONMENT & ATMOSPHERE:
 ${location}
-${lighting}
-${VISUAL_MANDATE.palette_and_atmosphere}
+${VISUAL_MANDATE.environment_directives}
+${VISUAL_MANDATE.lighting_directives}
+${VISUAL_MANDATE.palette}
 
-MOOD & DIRECTIVES:
+DIRECTIVES:
 ${VISUAL_MANDATE.mood}
-${VISUAL_MANDATE.directives}
+${VISUAL_MANDATE.character_directives}
 
-COMPOSITION (cinematic low-angle authority shot unless specified):
-Extreme close-up to medium shot, 50mm prime f/1.4, slight Dutch tilt, foreground bokeh.
-Action: ${beat.scene}
+COMPOSITION:
+Cinematic low-angle authority shot, 50mm prime f/1.4, slight Dutch tilt, foreground bokeh.
+Action in Scene: ${beat.scene}
 
 FOREGROUND AUTHORITY (100% identity lock):
 ${focusDNA}
@@ -134,25 +112,24 @@ Use uploaded reference 1 for exact facial identity` : ""}
 ${friendPresent ? `BACKGROUND ALLY (Reference 2 – preserve exact face/bone structure): ${CHARACTER_DNA.Ally}
 Use uploaded reference 2 for exact facial identity` : ""}
 
-CAMERA NEGATIVES (semantic style):
-ugly, deformed, extra limbs, blurry, low resolution, overexposed, underexposed, watermark, text, bright colors, cartoon, 3d render, flat lighting
+CAMERA NEGATIVES:
+ugly, deformed, extra limbs, blurry, low resolution, overexposed, underexposed, watermark, text, bright colors, cartoon, 3d render, flat lighting, anime
 `.trim();
   },
 
-  // One-shot cover prompts (already drift-proof)
   getCoverPrompt: (): string => `
-${VISUAL_MANDATE.style}, graphic novel cover, ultra-detailed
-Provost Selene stands on eroded marble dais in crimson robe plunging to navel, cold amused smile, looking down at shirtless kneeling Subject (back to viewer, bruises across ribs), dramatic crimson rim light, gaslamp glow, blood title space at top, baroque columns crumbling, volumetric fog
-${VISUAL_MANDATE.palette_and_atmosphere}`,
+${VISUAL_MANDATE.style}, graphic novel cover, ultra-detailed.
+Provost Selene stands on eroded marble dais in crimson robe plunging to navel, cold amused smile, looking down at shirtless kneeling Subject (back to viewer, bruises across ribs).
+Lighting: ${VISUAL_MANDATE.lighting_directives}. 
+Directives: ${VISUAL_MANDATE.character_directives}.
+${VISUAL_MANDATE.palette}`,
 
-  // One-shot back cover prompt
   getBackCoverPrompt: (): string => `
-${VISUAL_MANDATE.style}, graphic novel back cover, ultra-detailed
+${VISUAL_MANDATE.style}, graphic novel back cover, ultra-detailed.
 A shattered, transparent hourglass against a backdrop of the Forge's weeping concrete walls, wisps of dark fog swirling around it. Inside the hourglass, faint silhouettes of tormented male figures. A single drop of blood drips onto a cracked page. Text: "The Lesson Never Ends."
-${VISUAL_MANDATE.palette_and_atmosphere}
+${VISUAL_MANDATE.palette}
 `,
 
-  // Reverse-engineering helper – feed any generated image back in and get JSON DNA
   reverseEngineerPrompt: (): string => `
 Analyze this image and output a strict JSON object with these exact keys (no extra text):
 {

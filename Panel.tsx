@@ -126,10 +126,9 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
                         <div className="absolute bottom-32 inset-x-0 px-6 z-40 pointer-events-none flex justify-center">
                             <div className={`${voice.container} p-4 max-w-[85%] ${voice.anim}`}>
                                 <p className={`${voice.text} text-base md:text-lg`}>
-                                    {/* Add quotation marks only if not present in style (cleaner look) */}
                                     "{narrative.dialogue}"
                                 </p>
-                                {/* Tail triangle (pseudo-element simulation via SVG for better control) */}
+                                {/* Tail triangle */}
                                 <svg className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-6 h-4" viewBox="0 0 100 100" preserveAspectRatio="none">
                                    <path d="M0,0 L50,100 L100,0 Z" fill={voice.container.includes('bg-[#1a0505]') ? '#1a0505' : (voice.container.includes('bg-[#fff0f5]') ? '#fff0f5' : (voice.container.includes('bg-[#f0fdf4]') ? '#f0fdf4' : 'white'))} stroke={voice.container.includes('border') ? 'transparent' : 'black'} />
                                 </svg>
@@ -150,7 +149,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
                             key={i} 
                             onClick={(e) => { e.stopPropagation(); if(face.pageIndex) onChoice(face.pageIndex, choice); }}
                             className={`
-                                w-full py-3 px-4 text-base md:text-lg font-serif uppercase tracking-widest border transition-all duration-300
+                                w-full py-3 px-4 text-base md:text-lg font-title uppercase tracking-widest border transition-all duration-300
                                 ${i === 0 
                                     ? 'bg-[#2a0a0a] border-[#7c0a0a] text-[#e3dac9] hover:bg-[#4a0a0a] hover:border-[#d4af37] hover:scale-[1.02]' 
                                     : 'bg-[#0a0a0a] border-[#333] text-[#999] hover:bg-[#1a1a1a] hover:text-white hover:border-white hover:scale-[1.02]' 
@@ -172,7 +171,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
                         disabled={!allFaces.find(f => f.pageIndex === GATE_PAGE)?.imageUrl}
                         className="
                             group relative px-10 py-4 bg-black/60 backdrop-blur-sm border-2 border-[#d4af37] 
-                            text-[#d4af37] font-serif text-xl md:text-2xl tracking-[0.2em] uppercase
+                            text-[#d4af37] font-title text-xl md:text-2xl tracking-[0.2em] uppercase
                             hover:bg-[#d4af37] hover:text-[#0a0a0a] transition-all duration-500
                             disabled:opacity-50 disabled:cursor-wait disabled:hover:bg-black/60 disabled:hover:text-[#d4af37]
                         "
@@ -190,7 +189,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
             {/* Back Cover */}
             {isBackCover && (
                 <div className="absolute bottom-32 inset-x-0 flex flex-col items-center gap-4 z-40 px-8">
-                    <h3 className="text-[#7c0a0a] font-serif text-lg tracking-widest mb-1 uppercase">The Cycle Continues</h3>
+                    <h3 className="text-[#7c0a0a] font-title text-lg tracking-widest mb-1 uppercase">The Cycle Continues</h3>
                     <button 
                         onClick={(e) => { e.stopPropagation(); onDownload(); }} 
                         className="w-full max-w-md py-3 border border-[#666] bg-black/50 backdrop-blur-sm text-[#ccc] font-serif hover:border-white hover:text-white hover:bg-white/10 transition-all uppercase tracking-wider text-sm"
@@ -199,7 +198,7 @@ export const Panel: React.FC<PanelProps> = ({ face, allFaces, onChoice, onOpenBo
                     </button>
                     <button 
                         onClick={(e) => { e.stopPropagation(); onReset(); }} 
-                        className="w-full max-w-md py-3 bg-[#d4af37] text-black font-serif font-bold hover:bg-[#fff] transition-all shadow-[0_0_15px_rgba(212,175,55,0.4)] uppercase tracking-widest text-sm"
+                        className="w-full max-w-md py-3 bg-[#d4af37] text-black font-title font-bold hover:bg-[#fff] transition-all shadow-[0_0_15px_rgba(212,175,55,0.4)] uppercase tracking-widest text-sm"
                     >
                         Re-Enter The Forge
                     </button>

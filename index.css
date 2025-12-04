@@ -1,4 +1,5 @@
 
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400&family=Darker+Grotesque:wght@600;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -31,7 +32,7 @@ body::before {
 body {
   min-height: 100vh;
   /* Use serif for that academic/bookish feel */
-  font-family: 'Times New Roman', serif; 
+  font-family: 'Cormorant Garamond', serif; 
   margin: 0;
   color: var(--color-parchment);
 }
@@ -40,8 +41,9 @@ body {
   body { overflow-x: hidden; }
 }
 
-.font-comic { font-family: 'Bangers', cursive; }
-.font-serif { font-family: 'Times New Roman', serif; }
+.font-comic { font-family: 'Darker Grotesque', sans-serif; letter-spacing: 0.05em; }
+.font-serif { font-family: 'Cormorant Garamond', serif; }
+.font-title { font-family: 'Cinzel', serif; }
 
 /* --- 3D Book Mechanics --- */
 .comic-scene {
@@ -60,6 +62,7 @@ body {
   height: var(--page-height);
   transform-style: preserve-3d;
   transition: transform 0.5s ease;
+  will-change: transform; /* Performance Hint */
 }
 
 .book.opened {
@@ -79,6 +82,7 @@ body {
   transform-style: preserve-3d;
   transition: transform 0.8s cubic-bezier(0.645, 0.045, 0.355, 1.000);
   cursor: pointer;
+  will-change: transform; /* Performance Hint */
 }
 
 .paper.flipped {
@@ -149,7 +153,7 @@ body {
 }
 
 .comic-btn {
-  font-family: 'Times New Roman', serif;
+  font-family: 'Cinzel', serif;
   letter-spacing: 2px;
   border: 1px solid var(--color-gold);
   box-shadow: 0 0 10px rgba(0,0,0,0.5);

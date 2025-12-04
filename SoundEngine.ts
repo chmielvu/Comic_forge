@@ -7,8 +7,8 @@
 export const SoundManager = {
     ctx: null as AudioContext | null,
     muted: false,
-    droneOsc: null as OscillatorNode | null,
-    droneGain: null as GainNode | null,
+    oscillators: [] as OscillatorNode[],
+    gainNode: null as GainNode | null,
     lfo: null as OscillatorNode | null,
 
     init: () => {
@@ -31,61 +31,77 @@ export const SoundManager = {
         }
     },
 
-    // The "Symphony of Dread" - An infrasound hum
+    // The "Symphony of Dread" - Subdued Dark Pad
     startAmbience: () => {
         SoundManager.init();
-        if (!SoundManager.ctx || SoundManager.droneOsc) return;
+        if (!SoundManager.ctx || SoundManager.oscillators.length > 0) return;
 
-        const t = SoundManager.ctx.currentTime;
-        const mainGain = SoundManager.ctx.createGain();
-        mainGain.connect(SoundManager.ctx.destination);
+        const ctx = SoundManager.ctx;
+        const t = ctx.currentTime;
+        const mainGain = ctx.createGain();
+        mainGain.connect(ctx.destination);
         
-        // 1. Deep Sub-Bass Drone (The Geothermal Vent)
-        const drone = SoundManager.ctx.createOscillator();
-        drone.type = 'sawtooth';
-        drone.frequency.setValueAtTime(45, t); 
-        
-        const droneFilter = SoundManager.ctx.createBiquadFilter();
-        droneFilter.type = 'lowpass';
-        droneFilter.frequency.setValueAtTime(100, t);
-        droneFilter.Q.value = 1;
+        // Use a minor triad cluster in low register for tension
+        const freqs = [55, 65.41, 82.41]; // A1, C2, E2 (A Minorish)
+        const oscs: OscillatorNode[] = [];
 
-        // 2. LFO to modulate the drone (breathing effect)
-        const lfo = SoundManager.ctx.createOscillator();
+        freqs.forEach((f, i) => {
+            const osc = ctx.createOscillator();
+            osc.type = i === 0 ? 'sawtooth' : 'sine'; // Sawtooth for grit, sine for body
+            // Detune slightly for chorus effect
+            osc.frequency.setValueAtTime(f + (Math.random() * 2 - 1), t);
+            
+            const oscGain = ctx.createGain();
+            oscGain.gain.value = 0.03; // Very quiet
+
+            osc.connect(oscGain);
+            oscGain.connect(mainGain);
+            osc.start();
+            oscs.push(osc);
+        });
+
+        // LFO for "Breathing" / "Throbbing" effect (The Geothermal Vents)
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 150;
+        
+        const lfo = ctx.createOscillator();
         lfo.type = 'sine';
-        lfo.frequency.value = 0.1; // Very slow cycle (10 seconds)
+        lfo.frequency.value = 0.05; // 20 seconds cycle
         
-        const lfoGain = SoundManager.ctx.createGain();
-        lfoGain.gain.value = 20; // Modulate frequency by +/- 20Hz
+        const lfoGain = ctx.createGain();
+        lfoGain.gain.value = 100; // Sweep filter by 100Hz
         
         lfo.connect(lfoGain);
-        lfoGain.connect(droneFilter.frequency);
-
-        // Volume Envelope
-        mainGain.gain.setValueAtTime(0, t);
-        mainGain.gain.linearRampToValueAtTime(0.04, t + 3); // Slow fade in
-
-        drone.connect(droneFilter);
-        droneFilter.connect(mainGain);
+        lfoGain.connect(filter.frequency);
         
-        drone.start();
+        // Re-route main gain through filter
+        mainGain.disconnect();
+        mainGain.connect(filter);
+        filter.connect(ctx.destination);
+        
         lfo.start();
 
-        SoundManager.droneOsc = drone;
+        // Volume Envelope (Fade in)
+        mainGain.gain.setValueAtTime(0, t);
+        mainGain.gain.linearRampToValueAtTime(0.5, t + 5); 
+
+        SoundManager.oscillators = oscs;
         SoundManager.lfo = lfo;
-        SoundManager.droneGain = mainGain;
+        SoundManager.gainNode = mainGain;
     },
 
     stopAmbience: () => {
-        if (SoundManager.droneOsc && SoundManager.droneGain && SoundManager.ctx) {
+        if (SoundManager.oscillators.length > 0 && SoundManager.gainNode && SoundManager.ctx) {
             const t = SoundManager.ctx.currentTime;
-            SoundManager.droneGain.gain.exponentialRampToValueAtTime(0.001, t + 2);
-            SoundManager.droneOsc.stop(t + 2);
+            SoundManager.gainNode.gain.exponentialRampToValueAtTime(0.001, t + 2);
+            
+            SoundManager.oscillators.forEach(osc => osc.stop(t + 2));
             if (SoundManager.lfo) SoundManager.lfo.stop(t + 2);
             
-            SoundManager.droneOsc = null;
+            SoundManager.oscillators = [];
             SoundManager.lfo = null;
-            SoundManager.droneGain = null;
+            SoundManager.gainNode = null;
         }
     },
 
@@ -106,29 +122,27 @@ export const SoundManager = {
 
         switch (type) {
             case 'click':
-                // High crisp blip
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(800, t);
                 osc.frequency.exponentialRampToValueAtTime(300, t + 0.1);
-                gain.gain.setValueAtTime(0.1, t);
+                gain.gain.setValueAtTime(0.05, t); // Quieter click
                 gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
                 osc.start(t);
                 osc.stop(t + 0.1);
                 break;
 
             case 'hover':
-                // Subtle tick
                 osc.type = 'triangle';
                 osc.frequency.setValueAtTime(400, t);
-                gain.gain.setValueAtTime(0.05, t);
+                gain.gain.setValueAtTime(0.02, t);
                 gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
                 osc.start(t);
                 osc.stop(t + 0.05);
                 break;
 
             case 'flip':
-                // Synthesized paper noise
-                const bufferSize = ctx.sampleRate * 0.3; // 300ms
+                // Synthesized paper noise - unchanged but effective
+                const bufferSize = ctx.sampleRate * 0.3;
                 const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
                 const data = buffer.getChannelData(0);
                 for (let i = 0; i < bufferSize; i++) {
@@ -142,7 +156,7 @@ export const SoundManager = {
                 noiseFilter.frequency.linearRampToValueAtTime(100, t + 0.3);
                 
                 const noiseGain = ctx.createGain();
-                noiseGain.gain.setValueAtTime(0.15, t);
+                noiseGain.gain.setValueAtTime(0.1, t);
                 noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
 
                 noise.connect(noiseFilter);
@@ -152,7 +166,6 @@ export const SoundManager = {
                 break;
 
             case 'pow':
-                // Impact hit
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(100, t);
                 osc.frequency.exponentialRampToValueAtTime(20, t + 0.3);
@@ -163,11 +176,10 @@ export const SoundManager = {
                 break;
 
             case 'success':
-                // Ascending Arpeggio (Darker)
                 osc.type = 'triangle';
                 gain.gain.value = 0.05;
-                
-                [220, 277, 329, 440].forEach((freq, i) => { // Minor chord
+                // A minor triad arpeggio
+                [220, 261.63, 329.63].forEach((freq, i) => { 
                     const oscN = ctx.createOscillator();
                     const gainN = ctx.createGain();
                     oscN.type = 'triangle';
@@ -177,9 +189,9 @@ export const SoundManager = {
                     
                     const start = t + (i * 0.1);
                     gainN.gain.setValueAtTime(0.05, start);
-                    gainN.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
+                    gainN.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
                     oscN.start(start);
-                    oscN.stop(start + 0.4);
+                    oscN.stop(start + 0.5);
                 });
                 break;
         }
