@@ -85,7 +85,13 @@ export type Archetype =
   | 'Archivist'
   | 'Ghost'
   | 'Jester'
-  | 'Penitent';
+  | 'Penitent'
+  // Expanded
+  | 'EnigmaticBob'
+  | 'TavernInquisitor'
+  | 'RusticDissident'
+  | 'VictorianLogician'
+  | 'SmirkingSiren';
 
 export interface ComicFace {
   id: string;
@@ -111,6 +117,7 @@ export interface Beat {
   mood?: string;
   intent?: string; 
   ledger_impact?: Partial<YandereLedger>;
+  motifs?: string[]; // Added for VisualBible 5.0
 }
 
 export interface Persona {

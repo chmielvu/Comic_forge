@@ -31,7 +31,14 @@ const VOICE_MAP: Record<Archetype, string> = {
     'Archivist': 'Puck',    // Quiet
     'Ghost': 'Kore',        // Faint
     'Jester': 'Puck',       // Erratic
-    'Penitent': 'Charon'    // Low
+    'Penitent': 'Charon',    // Low
+
+    // Expanded from Imagery
+    'EnigmaticBob': 'Kore', // Mysterious, soft
+    'TavernInquisitor': 'Fenrir', // Fierce, rough
+    'RusticDissident': 'Aoife', // Haunted, vulnerable
+    'VictorianLogician': 'Puck', // Pensive, cold
+    'SmirkingSiren': 'Kore' // Alluring, manipulative
 };
 
 export const TTSService = {
