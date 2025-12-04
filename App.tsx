@@ -1,52 +1,53 @@
 
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI } from '@google/genai';
+import React, { useRef } from 'react';
+import { GoogleGenAI, Type } from '@google/genai';
 import jsPDF from 'jspdf';
-import { MAX_STORY_PAGES, BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, ComicFace, Beat, Persona, YandereLedger, Archetype } from './types';
+import { BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, ComicFace, Beat, Archetype } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
 import { SoundManager } from './SoundEngine';
 import { LoreEngine } from './LoreEngine';
 import { VisualBible } from './VisualBible';
+import { useGameStore } from './store';
 
 // --- Constants ---
-// Switched to Flash Image per request ("Nano Banana")
 const MODEL_IMAGE_GEN_NAME = "gemini-2.5-flash-image"; 
-const MODEL_TEXT_NAME = "gemini-2.5-flash"; // Flash is excellent for JSON reasoning logic
+const MODEL_TEXT_NAME = "gemini-2.5-flash"; 
 
 const App: React.FC = () => {
-  // --- API Key Hook ---
-  // The API key is now assumed to be provided via process.env.API_KEY
-  // No explicit user selection dialog is needed for gemini-2.5-flash-image.
+  // --- Atomic Selectors (Prevents Render Thrashing) ---
+  const hero = useGameStore(s => s.hero);
+  const friend = useGameStore(s => s.friend);
+  const soundEnabled = useGameStore(s => s.soundEnabled);
+  const ledger = useGameStore(s => s.ledger);
+  const comicFaces = useGameStore(s => s.comicFaces);
+  const currentSheetIndex = useGameStore(s => s.currentSheetIndex);
+  const isStarted = useGameStore(s => s.isStarted);
+  const showSetup = useGameStore(s => s.showSetup);
+  const isTransitioning = useGameStore(s => s.isTransitioning);
 
-  const [hero, setHeroState] = useState<Persona | null>(null); // "The Subject"
-  const [friend, setFriendState] = useState<Persona | null>(null); // "The Ally"
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  
-  // New State: The Yandere Ledger
-  const [ledger, setLedger] = useState<YandereLedger>({ hope: 50, trauma: 10, integrity: 90 });
+  // --- Actions ---
+  const setHero = useGameStore(s => s.setHero);
+  const setFriend = useGameStore(s => s.setFriend);
+  const setSoundEnabled = useGameStore(s => s.setSoundEnabled);
+  const setLedger = useGameStore(s => s.setLedger);
+  const updateLedger = useGameStore(s => s.updateLedger);
+  const setComicFaces = useGameStore(s => s.setComicFaces);
+  const updateFaceState = useGameStore(s => s.updateFaceState);
+  const setCurrentSheetIndex = useGameStore(s => s.setCurrentSheetIndex);
+  const setIsStarted = useGameStore(s => s.setIsStarted);
+  const setShowSetup = useGameStore(s => s.setShowSetup);
+  const setIsTransitioning = useGameStore(s => s.setIsTransitioning);
+  const resetStore = useGameStore(s => s.resetStore);
 
-  const heroRef = useRef<Persona | null>(null);
-  const friendRef = useRef<Persona | null>(null);
-
-  const setHero = (p: Persona | null) => { setHeroState(p); heroRef.current = p; };
-  const setFriend = (p: Persona | null) => { setFriendState(p); friendRef.current = p; };
-  
-  const [comicFaces, setComicFaces] = useState<ComicFace[]>([]);
-  const [currentSheetIndex, setCurrentSheetIndex] = useState(0);
-  const [isStarted, setIsStarted] = useState(false);
-  
-  // --- Transition States ---
-  const [showSetup, setShowSetup] = useState(true);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-
+  // Local refs for generation tracking only (not state)
   const generatingPages = useRef(new Set<number>());
-  const historyRef = useRef<ComicFace[]>([]);
 
   // --- AI Helpers ---
   const getAI = () => {
@@ -56,8 +57,6 @@ const App: React.FC = () => {
   const handleAPIError = (e: any) => {
     const msg = String(e);
     console.error("API Error:", msg);
-    // Removed API key dialog logic as it's no longer necessary for gemini-2.5-flash-image
-    // and process.env.API_KEY is assumed to be pre-configured.
     alert(`An API error occurred. Please check your console for details. Error: ${msg}`);
   };
 
@@ -70,15 +69,21 @@ const App: React.FC = () => {
     });
   };
 
-  const generateBeat = async (history: ComicFace[], pageNum: number, isDecisionPage: boolean): Promise<Beat> => {
-    if (!heroRef.current) throw new Error("No Subject");
+  const generateBeat = async (pageNum: number, isDecisionPage: boolean): Promise<Beat> => {
+    // Access state directly via getState to avoid stale closures in async functions
+    const state = useGameStore.getState();
+    const currentHero = state.hero;
+    const currentLedger = state.ledger;
+    const currentFaces = state.comicFaces;
+
+    if (!currentHero) throw new Error("No Subject");
 
     // Get context from LoreEngine (The Director)
     const sceneConfig = LoreEngine.getSceneConfig(pageNum);
-    const systemInstruction = LoreEngine.getSystemInstruction(ledger);
+    const systemInstruction = LoreEngine.getSystemInstruction(currentLedger);
 
     // Get relevant history
-    const relevantHistory = history
+    const relevantHistory = currentFaces
         .filter(p => p.type === 'story' && p.narrative && (p.pageIndex || 0) < pageNum)
         .sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
 
@@ -99,28 +104,47 @@ PREVIOUS EVENTS:
 ${historyText.length > 0 ? historyText : "The Subject arrives at The Forge. The air smells of salt and dread."}
 
 EXECUTE GRAPH OF THOUGHTS:
-1. Analyze the Subject's current Ledger (Hope: ${ledger.hope}, Trauma: ${ledger.trauma}).
+1. Analyze the Subject's current Ledger (Hope: ${currentLedger.hope}, Trauma: ${currentLedger.trauma}).
 2. Determine the Focus Character's strategy (e.g. Gaslighting, Kinetic Violence).
-3. Generate the Beat JSON.
+3. Generate the Beat JSON with rich, atmospheric dialogue and detailed visual descriptions.
 `;
+
+    // Strict Schema to prevent JSON errors
+    const beatSchema = {
+      type: Type.OBJECT,
+      properties: {
+        thought_chain: { type: Type.STRING },
+        caption: { type: Type.STRING },
+        dialogue: { type: Type.STRING },
+        scene: { type: Type.STRING },
+        choices: { type: Type.ARRAY, items: { type: Type.STRING } },
+        ledger_impact: {
+          type: Type.OBJECT,
+          properties: {
+            hope: { type: Type.NUMBER },
+            trauma: { type: Type.NUMBER },
+            integrity: { type: Type.NUMBER },
+          }
+        }
+      },
+      required: ["thought_chain", "caption", "dialogue", "scene"]
+    };
 
     try {
         const ai = getAI();
         const res = await ai.models.generateContent({ 
             model: MODEL_TEXT_NAME, 
-            contents: prompt, 
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
             config: { 
                 responseMimeType: 'application/json',
+                responseSchema: beatSchema,
                 systemInstruction: systemInstruction 
             } 
         });
         
-        let rawText = res.text || "{}";
-        rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        const parsed = JSON.parse(rawText);
+        // With schema, we can safely parse the text
+        const parsed = JSON.parse(res.text || "{}");
         
-        if (parsed.dialogue) parsed.dialogue = parsed.dialogue.replace(/^[\w\s\-]+:\s*/i, '').replace(/["']/g, '').trim();
-        if (parsed.caption) parsed.caption = parsed.caption.replace(/^[\w\s\-]+:\s*/i, '').trim();
         if (!isDecisionPage) parsed.choices = [];
         
         // Inject metadata for Visual Engine
@@ -128,13 +152,12 @@ EXECUTE GRAPH OF THOUGHTS:
         parsed.location = sceneConfig.location;
         parsed.intent = sceneConfig.intent;
 
-        // Apply ledger impact
         if (parsed.ledger_impact) {
-            setLedger(prev => ({
-                hope: Math.max(0, Math.min(100, prev.hope + (parsed.ledger_impact.hope || 0))),
-                trauma: Math.max(0, Math.min(100, prev.trauma + (parsed.ledger_impact.trauma || 0))),
-                integrity: Math.max(0, Math.min(100, prev.integrity + (parsed.ledger_impact.integrity || 0))),
-            }));
+            updateLedger({
+                hope: Math.max(0, Math.min(100, currentLedger.hope + (parsed.ledger_impact.hope || 0))),
+                trauma: Math.max(0, Math.min(100, currentLedger.trauma + (parsed.ledger_impact.trauma || 0))),
+                integrity: Math.max(0, Math.min(100, currentLedger.integrity + (parsed.ledger_impact.integrity || 0))),
+            });
         }
 
         return parsed as Beat;
@@ -144,6 +167,7 @@ EXECUTE GRAPH OF THOUGHTS:
         return { 
             caption: "The fog thickens...", 
             scene: "A dark figure looms in the shadows.", 
+            dialogue: "...",
             focus_char: sceneConfig.focus, 
             location: sceneConfig.location,
             choices: [] 
@@ -152,16 +176,20 @@ EXECUTE GRAPH OF THOUGHTS:
   };
 
   const generateImage = async (beat: Beat, type: ComicFace['type']): Promise<string> => {
+    const state = useGameStore.getState();
+    const currentHero = state.hero;
+    const currentFriend = state.friend;
+
     const contents = [];
     
     // Inject References
-    if (heroRef.current?.base64) {
+    if (currentHero?.base64) {
         contents.push({ text: "REFERENCE 1 [SUBJECT]:" });
-        contents.push({ inlineData: { mimeType: 'image/jpeg', data: heroRef.current.base64 } });
+        contents.push({ inlineData: { mimeType: 'image/jpeg', data: currentHero.base64 } });
     }
-    if (friendRef.current?.base64) {
+    if (currentFriend?.base64) {
         contents.push({ text: "REFERENCE 2 [ALLY]:" });
-        contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendRef.current.base64 } });
+        contents.push({ inlineData: { mimeType: 'image/jpeg', data: currentFriend.base64 } });
     }
 
     let promptText = "";
@@ -170,7 +198,8 @@ EXECUTE GRAPH OF THOUGHTS:
     } else if (type === 'back_cover') {
         promptText = VisualBible.getBackCoverPrompt();
     } else {
-        promptText = VisualBible.constructPrompt(beat, !!heroRef.current, !!friendRef.current);
+        // Pass full Persona objects for better identity construction in VisualBible
+        promptText = VisualBible.constructPrompt(beat, !!currentHero, !!currentFriend);
     }
 
     contents.push({ text: promptText });
@@ -180,11 +209,7 @@ EXECUTE GRAPH OF THOUGHTS:
         const res = await ai.models.generateContent({
           model: MODEL_IMAGE_GEN_NAME,
           contents: contents,
-          config: { 
-              // Flash Image specific tuning
-              // Note: aspectRatio not fully supported in config for all versions, usually managed via prompt or post-process in some libs
-              // But we keep it if supported by this SDK version
-          }
+          config: {}
         });
         const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
@@ -192,12 +217,6 @@ EXECUTE GRAPH OF THOUGHTS:
         handleAPIError(e);
         return ''; 
     }
-  };
-
-  const updateFaceState = (id: string, updates: Partial<ComicFace>) => {
-      setComicFaces(prev => prev.map(f => f.id === id ? { ...f, ...updates } : f));
-      const idx = historyRef.current.findIndex(f => f.id === id);
-      if (idx !== -1) historyRef.current[idx] = { ...historyRef.current[idx], ...updates };
   };
 
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type']) => {
@@ -210,12 +229,13 @@ EXECUTE GRAPH OF THOUGHTS:
       } else if (type === 'back_cover') {
           beat = { scene: "Teaser", choices: [], focus_char: 'Subject', location: 'Void' };
       } else {
-          beat = await generateBeat(historyRef.current, pageNum, isDecision);
+          // Pass null for history, it will be fetched from store inside generateBeat
+          beat = await generateBeat(pageNum, isDecision);
       }
 
-      updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
+      useGameStore.getState().updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
       const url = await generateImage(beat, type);
-      updateFaceState(faceId, { imageUrl: url, isLoading: false });
+      useGameStore.getState().updateFaceState(faceId, { imageUrl: url, isLoading: false });
   };
 
   const generateBatch = async (startPage: number, count: number) => {
@@ -236,13 +256,14 @@ EXECUTE GRAPH OF THOUGHTS:
           newFaces.push({ id: `page-${pageNum}`, type, choices: [], isLoading: true, pageIndex: pageNum });
       });
 
-      setComicFaces(prev => {
+      setComicFaces((prev) => {
           const existing = new Set(prev.map(f => f.id));
           return [...prev, ...newFaces.filter(f => !existing.has(f.id))];
       });
-      newFaces.forEach(f => { if (!historyRef.current.find(h => h.id === f.id)) historyRef.current.push(f); });
 
       try {
+          // Sequential generation for narrative continuity, but could be parallelized if history is pre-calculated
+          // We keep it sequential here to ensure Ledger updates correctly propagate
           for (const pageNum of pagesToGen) {
                await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
                generatingPages.current.delete(pageNum);
@@ -257,21 +278,18 @@ EXECUTE GRAPH OF THOUGHTS:
   const launchStory = async (name: string, fear: string) => {
     SoundManager.init();
     SoundManager.play('success');
-    if (soundEnabled) SoundManager.startAmbience();
-
-    // No explicit API key validation/dialog for gemini-2.5-flash-image;
-    // process.env.API_KEY is assumed to be configured externally.
+    if (useGameStore.getState().soundEnabled) SoundManager.startAmbience();
     
-    if (!heroRef.current) return;
+    const currentHero = useGameStore.getState().hero;
+    if (!currentHero) return;
     
-    const updatedHero = { ...heroRef.current, name, coreFear: fear, archetype: 'Subject' as Archetype };
+    const updatedHero = { ...currentHero, name, coreFear: fear, archetype: 'Subject' as Archetype };
     setHero(updatedHero);
 
     setIsTransitioning(true);
     
     const coverFace: ComicFace = { id: 'cover', type: 'cover', choices: [], isLoading: true, pageIndex: 0 };
     setComicFaces([coverFace]);
-    historyRef.current = [coverFace];
     generatingPages.current.add(0);
 
     generateSinglePage('cover', 0, 'cover').finally(() => generatingPages.current.delete(0));
@@ -280,7 +298,7 @@ EXECUTE GRAPH OF THOUGHTS:
         setIsStarted(true);
         setShowSetup(false);
         setIsTransitioning(false);
-        setCurrentSheetIndex(1); // Set to 1 to automatically open the book to the first story page
+        setCurrentSheetIndex(1); // Open book
         await generateBatch(1, INITIAL_PAGES);
         generateBatch(3, 3);
     }, 2000);
@@ -289,7 +307,10 @@ EXECUTE GRAPH OF THOUGHTS:
   const handleChoice = async (pageIndex: number, choice: string) => {
       SoundManager.play('click');
       updateFaceState(`page-${pageIndex}`, { resolvedChoice: choice });
-      const maxPage = Math.max(...historyRef.current.map(f => f.pageIndex || 0));
+      
+      const currentFaces = useGameStore.getState().comicFaces;
+      const maxPage = Math.max(...currentFaces.map(f => f.pageIndex || 0));
+      
       if (maxPage + 1 <= TOTAL_PAGES) {
           generateBatch(maxPage + 1, BATCH_SIZE);
       }
@@ -298,15 +319,8 @@ EXECUTE GRAPH OF THOUGHTS:
   const resetApp = () => {
       SoundManager.play('click');
       SoundManager.stopAmbience();
-      setIsStarted(false);
-      setShowSetup(true);
-      setComicFaces([]);
-      setCurrentSheetIndex(0);
-      historyRef.current = [];
+      resetStore();
       generatingPages.current.clear();
-      setHero(null);
-      setFriend(null);
-      setLedger({ hope: 50, trauma: 10, integrity: 90 });
   };
 
   const downloadPDF = () => {
@@ -314,7 +328,9 @@ EXECUTE GRAPH OF THOUGHTS:
     const PAGE_WIDTH = 480;
     const PAGE_HEIGHT = 720;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: [PAGE_WIDTH, PAGE_HEIGHT] });
-    const pagesToPrint = comicFaces.filter(face => face.imageUrl && !face.isLoading).sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
+    const pagesToPrint = useGameStore.getState().comicFaces
+        .filter(face => face.imageUrl && !face.isLoading)
+        .sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
 
     pagesToPrint.forEach((face, index) => {
         if (index > 0) doc.addPage([PAGE_WIDTH, PAGE_HEIGHT], 'portrait');
@@ -339,14 +355,15 @@ EXECUTE GRAPH OF THOUGHTS:
   };
 
   const handleSheetClick = (index: number) => {
-      if (!isStarted) return;
-      if (index === 0 && currentSheetIndex === 0) return;
+      const state = useGameStore.getState();
+      if (!state.isStarted) return;
+      if (index === 0 && state.currentSheetIndex === 0) return;
       
-      if (index < currentSheetIndex) {
+      if (index < state.currentSheetIndex) {
          setCurrentSheetIndex(index);
          SoundManager.play('flip');
       }
-      else if (index === currentSheetIndex && comicFaces.find(f => f.pageIndex === index)?.imageUrl) {
+      else if (index === state.currentSheetIndex && state.comicFaces.find(f => f.pageIndex === index)?.imageUrl) {
          setCurrentSheetIndex(prev => prev + 1);
          SoundManager.play('flip');
       }
@@ -357,7 +374,7 @@ EXECUTE GRAPH OF THOUGHTS:
       SoundManager.setMuted(!enabled);
       if (enabled) {
           SoundManager.play('click');
-          if (isStarted) SoundManager.startAmbience();
+          if (useGameStore.getState().isStarted) SoundManager.startAmbience();
       } else {
           SoundManager.stopAmbience();
       }
@@ -365,10 +382,6 @@ EXECUTE GRAPH OF THOUGHTS:
 
   return (
     <div className="comic-scene">
-      {/* ApiKeyDialog is removed as `gemini-2.5-flash-image` does not require explicit API key selection dialog.
-          API_KEY is assumed to be configured in the environment. */}
-      {/* {showApiKeyDialog && <ApiKeyDialog onContinue={handleApiKeyDialogContinue} />} */}
-      
       <Setup 
           show={showSetup}
           isTransitioning={isTransitioning}
@@ -380,7 +393,6 @@ EXECUTE GRAPH OF THOUGHTS:
           onLaunch={launchStory}
           onSoundChange={handleSoundToggle}
       />
-      
       <Book 
           comicFaces={comicFaces}
           currentSheetIndex={currentSheetIndex}
