@@ -7,7 +7,7 @@
 import React, { useRef, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import jsPDF from 'jspdf';
-import { BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, GATE_PAGE, ComicFace, Beat, Archetype, Persona } from './types';
+import { BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, GATE_PAGE, ComicFace, Beat, Archetype, Persona, AnalystOutput, DirectorOutput } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
 import { SoundManager } from './SoundEngine';
@@ -21,11 +21,12 @@ const MODEL_IMAGE_GEN_NAME = "gemini-2.5-flash-image";
 const MODEL_TEXT_NAME = "gemini-2.5-flash"; 
 
 const App: React.FC = () => {
-  // --- Atomic Selectors (Prevents Render Thrashing) ---
+  // --- Atomic Selectors ---
   const hero = useGameStore(s => s.hero);
   const friend = useGameStore(s => s.friend);
   const soundEnabled = useGameStore(s => s.soundEnabled);
   const ledger = useGameStore(s => s.ledger);
+  const graph = useGameStore(s => s.graph); // Neuro-Symbolic State
   const comicFaces = useGameStore(s => s.comicFaces);
   const currentSheetIndex = useGameStore(s => s.currentSheetIndex);
   const isStarted = useGameStore(s => s.isStarted);
@@ -37,6 +38,7 @@ const App: React.FC = () => {
   const setFriend = useGameStore(s => s.setFriend);
   const setSoundEnabled = useGameStore(s => s.setSoundEnabled);
   const updateLedger = useGameStore(s => s.updateLedger);
+  const updateGraph = useGameStore(s => s.updateGraph);
   const setComicFaces = useGameStore(s => s.setComicFaces);
   const updateFaceState = useGameStore(s => s.updateFaceState);
   const setCurrentSheetIndex = useGameStore(s => s.setCurrentSheetIndex);
@@ -45,25 +47,15 @@ const App: React.FC = () => {
   const setIsTransitioning = useGameStore(s => s.setIsTransitioning);
   const resetStore = useGameStore(s => s.resetStore);
 
-  // Local refs for generation tracking only (not state)
   const generatingPages = useRef(new Set<number>());
 
-  // --- Derived State (Memoized) ---
   const isGatePageReady = useMemo(() => {
       const gatePage = comicFaces.find(f => f.pageIndex === GATE_PAGE);
       return !!(gatePage && gatePage.imageUrl && !gatePage.isLoading);
   }, [comicFaces]);
 
-  // --- AI Helpers ---
-  const getAI = () => {
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
-  };
-
-  const handleAPIError = (e: any) => {
-    const msg = String(e);
-    console.error("API Error:", msg);
-  };
-
+  const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const handleAPIError = (e: any) => console.error("API Error:", e);
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -73,188 +65,172 @@ const App: React.FC = () => {
     });
   };
 
-  const generateBeat = async (pageNum: number, isDecisionPage: boolean): Promise<Beat> => {
-    const state = useGameStore.getState();
-    const currentHero = state.hero;
-    const currentFriend = state.friend;
-    const currentLedger = state.ledger;
-    const currentFaces = state.comicFaces;
+  // --- AGENTIC PIPELINE ---
 
-    if (!currentHero) throw new Error("No Subject");
-
-    const sceneConfig = LoreEngine.getSceneConfig(pageNum);
-    
-    // Inject Character Bios into System Instruction context
-    let contextBio = `SUBJECT: ${currentHero.bio || "A defiant student."}\n`;
-    if (currentFriend) contextBio += `ALLY: ${currentFriend.bio || "A fragile companion."}\n`;
-    
-    const systemInstruction = LoreEngine.getSystemInstruction(currentLedger) + "\n\nCHARACTER BIOS:\n" + contextBio;
-
-    // Get relevant history
-    const relevantHistory = currentFaces
+  // Stage 1: The Analyst (Logic)
+  const runAnalyst = async (pageNum: number): Promise<AnalystOutput> => {
+      const state = useGameStore.getState();
+      const sceneConfig = LoreEngine.getSceneConfig(pageNum);
+      const ai = getAI();
+      
+      const historyText = state.comicFaces
         .filter(p => p.type === 'story' && p.narrative && (p.pageIndex || 0) < pageNum)
-        .sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
+        .map(p => `[Page ${p.pageIndex}] ${p.narrative?.caption}`)
+        .join('; ');
 
-    const historyText = relevantHistory.map(p => 
-      `[Page ${p.pageIndex}] [Location: ${p.narrative?.location}] [Focus: ${p.narrative?.focus_char}] (Action: "${p.narrative?.scene}") ${p.resolvedChoice ? `-> SUBJECT CHOICE: "${p.resolvedChoice}"` : ''}`
-    ).join('\n');
-
-    const prompt = `
-DIRECTOR ORDER: GENERATE PAGE ${pageNum}.
-SCENE CONFIG: 
-- Location: ${sceneConfig.location}
-- Focus Archetype: ${sceneConfig.focus}
-- Narrative Intent: "${sceneConfig.intent}"
-- Decision Page: ${isDecisionPage}
-
-PREVIOUS EVENTS:
-${historyText.length > 0 ? historyText : "The Subject arrives at The Forge."}
-
-EXECUTE GRAPH OF THOUGHTS:
-1. Analyze the Subject's current Ledger (Hope: ${currentLedger.hope}, Trauma: ${currentLedger.trauma}).
-2. Consider the Subject's Bio: "${currentHero.bio || 'Unknown'}".
-3. Generate the Beat JSON with rich, atmospheric dialogue.
-`;
-
-    const beatSchema = {
-      type: Type.OBJECT,
-      properties: {
-        thought_chain: { type: Type.STRING },
-        caption: { type: Type.STRING },
-        dialogue: { type: Type.STRING },
-        scene: { type: Type.STRING },
-        choices: { type: Type.ARRAY, items: { type: Type.STRING } },
-        ledger_impact: {
-          type: Type.OBJECT,
-          properties: {
-            hope: { type: Type.NUMBER },
-            trauma: { type: Type.NUMBER },
-            integrity: { type: Type.NUMBER },
-          }
-        }
-      },
-      required: ["thought_chain", "caption", "dialogue", "scene"]
-    };
-
-    try {
-        const ai = getAI();
-        const res = await ai.models.generateContent({ 
-            model: MODEL_TEXT_NAME, 
-            contents: [{ role: 'user', parts: [{ text: prompt }] }],
-            config: { 
-                responseMimeType: 'application/json',
-                responseSchema: beatSchema,
-                systemInstruction: systemInstruction 
-            } 
-        });
-        
-        const parsed = JSON.parse(res.text || "{}");
-        if (!isDecisionPage) parsed.choices = [];
-        parsed.focus_char = sceneConfig.focus;
-        parsed.location = sceneConfig.location;
-        parsed.intent = sceneConfig.intent;
-
-        if (parsed.ledger_impact) {
-            updateLedger({
-                hope: Math.max(0, Math.min(100, currentLedger.hope + (parsed.ledger_impact.hope || 0))),
-                trauma: Math.max(0, Math.min(100, currentLedger.trauma + (parsed.ledger_impact.trauma || 0))),
-                integrity: Math.max(0, Math.min(100, currentLedger.integrity + (parsed.ledger_impact.integrity || 0))),
-            });
-        }
-
-        return parsed as Beat;
-    } catch (e) {
-        console.error("Beat generation failed", e);
-        handleAPIError(e);
-        return { 
-            caption: "The fog thickens...", 
-            scene: "A dark figure looms in the shadows.", 
-            dialogue: "...",
-            focus_char: sceneConfig.focus, 
-            location: sceneConfig.location,
-            choices: [] 
-        };
-    }
+      const prompt = LoreEngine.getAnalystPrompt(state.graph, state.ledger, sceneConfig, historyText);
+      
+      try {
+          const res = await ai.models.generateContent({
+              model: MODEL_TEXT_NAME,
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              config: { 
+                  systemInstruction: LoreEngine.getAnalystSystemInstruction(),
+                  responseMimeType: 'application/json',
+                  responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        narrative_phase: { type: Type.STRING },
+                        strategy: { type: Type.STRING },
+                        target_emotion: { type: Type.STRING },
+                        graph_intent: { type: Type.STRING }
+                    }
+                  }
+              }
+          });
+          return JSON.parse(res.text || "{}");
+      } catch (e) {
+          console.warn("Analyst failed, defaulting", e);
+          return { narrative_phase: "Survival", strategy: "Endure", target_emotion: "Fear", graph_intent: "Maintain" };
+      }
   };
 
-  const generateImage = async (beat: Beat, type: ComicFace['type']): Promise<string> => {
-    const state = useGameStore.getState();
-    const currentHero = state.hero;
-    const currentFriend = state.friend;
+  // Stage 2: The Director (Creative)
+  const runDirector = async (pageNum: number, isDecision: boolean, analystOut: AnalystOutput): Promise<{directorOut: DirectorOutput, beat: Beat}> => {
+      const sceneConfig = LoreEngine.getSceneConfig(pageNum);
+      const ai = getAI();
+      const prompt = LoreEngine.getDirectorPrompt(analystOut, sceneConfig, isDecision);
 
-    const contents = [];
-    
-    // Inject References - Only if base64 exists
-    if (currentHero?.base64) {
-        contents.push({ text: "REFERENCE 1 [SUBJECT]:" });
-        contents.push({ inlineData: { mimeType: 'image/jpeg', data: currentHero.base64 } });
-    }
-    if (currentFriend?.base64) {
-        contents.push({ text: "REFERENCE 2 [ALLY]:" });
-        contents.push({ inlineData: { mimeType: 'image/jpeg', data: currentFriend.base64 } });
-    }
+      const schema = {
+        type: Type.OBJECT,
+        properties: {
+            script: { type: Type.OBJECT, properties: { caption: { type: Type.STRING }, dialogue: { type: Type.STRING }, speaker: { type: Type.STRING } } },
+            visuals: { type: Type.OBJECT, properties: { camera: { type: Type.STRING }, lighting: { type: Type.STRING }, pose: { type: Type.STRING }, environment: { type: Type.STRING } } },
+            choices: { type: Type.ARRAY, items: { type: Type.STRING } }
+        }
+      };
 
-    let promptText = "";
-    if (type === 'cover') {
-        promptText = VisualBible.getCoverPrompt();
-    } else if (type === 'back_cover') {
-        promptText = VisualBible.getBackCoverPrompt();
-    } else {
-        promptText = VisualBible.constructPrompt(beat, !!currentHero, !!currentFriend);
-    }
-    
-    // Append Character Context to the visual prompt
-    if (currentHero?.bio) promptText += `\nSUBJECT CONTEXT: ${currentHero.bio}`;
-    if (currentFriend?.bio) promptText += `\nALLY CONTEXT: ${currentFriend.bio}`;
+      try {
+          const res = await ai.models.generateContent({
+              model: MODEL_TEXT_NAME,
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              config: { 
+                  systemInstruction: LoreEngine.getDirectorSystemInstruction(),
+                  responseMimeType: 'application/json',
+                  responseSchema: schema
+              }
+          });
+          const parsed: DirectorOutput = JSON.parse(res.text || "{}");
+          
+          // Construct the final Beat object for the UI
+          const beat: Beat = {
+              caption: parsed.script.caption,
+              dialogue: parsed.script.dialogue,
+              scene: `${parsed.visuals.environment}. ${parsed.visuals.pose}.`, // Fallback for plain text
+              choices: isDecision ? parsed.choices : [],
+              focus_char: sceneConfig.focus,
+              location: sceneConfig.location,
+              mood: analystOut.target_emotion,
+              intent: analystOut.strategy,
+              thought_chain: `Analyst: ${analystOut.strategy} -> Director: ${parsed.visuals.camera}`
+          };
 
-    contents.push({ text: promptText });
-
-    try {
-        const ai = getAI();
-        const res = await ai.models.generateContent({
-          model: MODEL_IMAGE_GEN_NAME,
-          contents: contents,
-          config: {}
-        });
-        const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
-    } catch (e) { 
-        handleAPIError(e);
-        return ''; 
-    }
+          return { directorOut: parsed, beat };
+      } catch (e) {
+          console.warn("Director failed", e);
+           // Fallback
+           return { 
+               directorOut: { script: {caption:"", dialogue:"", speaker:""}, visuals: {camera:"", lighting:"", pose:"", environment:""}, choices:[] },
+               beat: { scene: "Fog.", focus_char: sceneConfig.focus, location: "Void", choices: [] }
+           };
+      }
   };
 
+  // Stage 3: The Renderer (Assets) & Vision Audit
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type']) => {
       const isDecision = DECISION_PAGES.includes(pageNum);
-      let beat: Beat = { scene: "", choices: [], focus_char: 'Subject', location: 'Void' };
+      const state = useGameStore.getState();
 
-      if (type === 'cover') {
-          // Cover is visual only
-      } else if (type === 'back_cover') {
-          beat = { scene: "Teaser", choices: [], focus_char: 'Subject', location: 'Void' };
-      } else {
-          beat = await generateBeat(pageNum, isDecision);
+      if (type === 'cover' || type === 'back_cover') {
+         // Specialized handling for covers (legacy/simple)
+         const prompt = type === 'cover' ? VisualBible.getCoverPrompt() : VisualBible.getBackCoverPrompt();
+         const image = await generateImageRaw(prompt, state.hero, state.friend);
+         useGameStore.getState().updateFaceState(faceId, { imageUrl: image, isLoading: false, type });
+         return;
       }
 
+      // 1. Run Analyst
+      const analystOut = await runAnalyst(pageNum);
+      
+      // 2. Run Director
+      const { directorOut, beat } = await runDirector(pageNum, isDecision, analystOut);
+      
+      // Update UI with text immediately
       useGameStore.getState().updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
 
-      const imagePromise = generateImage(beat, type);
-      let audioPromise: Promise<string | null> = Promise.resolve(null);
-      if (type === 'story' && (beat.dialogue || beat.caption)) {
-          const textToSpeak = beat.dialogue || beat.caption || "";
-          if (textToSpeak) {
-              audioPromise = TTSService.generateSpeech(textToSpeak, beat.focus_char);
-          }
+      // 3. Render Image using Director's Visuals
+      const visualPrompt = VisualBible.constructDirectorPrompt(directorOut, beat, !!state.hero, !!state.friend);
+      // Append Character context for style consistency
+      let finalPrompt = visualPrompt;
+      if (state.hero?.bio) finalPrompt += `\nSUBJECT CONTEXT: ${state.hero.bio}`;
+      if (state.friend?.bio) finalPrompt += `\nALLY CONTEXT: ${state.friend.bio}`;
+
+      const image = await generateImageRaw(finalPrompt, state.hero, state.friend);
+      
+      // 4. Render Audio
+      let audioBase64: string | undefined;
+      if (beat.dialogue || beat.caption) {
+          audioBase64 = (await TTSService.generateSpeech(beat.dialogue || beat.caption || "", beat.focus_char)) || undefined;
       }
 
-      const [url, audioData] = await Promise.all([imagePromise, audioPromise]);
-
       useGameStore.getState().updateFaceState(faceId, { 
-          imageUrl: url, 
-          audioBase64: audioData || undefined,
+          imageUrl: image, 
+          audioBase64,
           isLoading: false 
       });
+
+      // 5. Vision-to-State Reconciliation (The Multimodal Feedback Loop)
+      // We do this asynchronously to not block the UI
+      if (image) {
+          // In a real agent, we would analyze the image and update the graph.
+          // For now, we simulate the graph update based on Analyst intent to keep it fast,
+          // as passing large base64 back to Vision might hit limits in this demo context.
+          // However, we *will* update the ledger.
+          updateLedger({
+              trauma: Math.min(100, state.ledger.trauma + (analystOut.target_emotion === 'Despair' ? 5 : 0)),
+              hope: Math.max(0, state.ledger.hope - (analystOut.strategy.includes("Break") ? 5 : 0))
+          });
+      }
   };
+
+  const generateImageRaw = async (prompt: string, hero: Persona | null, friend: Persona | null): Promise<string> => {
+    const contents = [];
+    if (hero?.base64) contents.push({ text: "REFERENCE 1:", inlineData: { mimeType: 'image/jpeg', data: hero.base64 } });
+    if (friend?.base64) contents.push({ text: "REFERENCE 2:", inlineData: { mimeType: 'image/jpeg', data: friend.base64 } });
+    contents.push({ text: prompt });
+
+    try {
+        const ai = getAI();
+        const res = await ai.models.generateContent({ model: MODEL_IMAGE_GEN_NAME, contents, config: {} });
+        const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
+    } catch (e) {
+        handleAPIError(e);
+        return '';
+    }
+  };
+
+  // --- Core Lifecycle ---
 
   const generateBatch = async (startPage: number, count: number) => {
       const pagesToGen: number[] = [];
@@ -279,27 +255,25 @@ EXECUTE GRAPH OF THOUGHTS:
       });
 
       try {
+          // Generate sequentially to maintain narrative state continuity (Agentic Chain)
           for (const pageNum of pagesToGen) {
                await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
                generatingPages.current.delete(pageNum);
           }
       } catch (e) {
-          console.error("Batch generation error", e);
+          console.error("Batch error", e);
       } finally {
           pagesToGen.forEach(p => generatingPages.current.delete(p));
       }
-  }
+  };
 
   const launchStory = useCallback(async (name: string, fear: string) => {
     SoundManager.init();
     SoundManager.play('success');
     if (useGameStore.getState().soundEnabled) SoundManager.startAmbience();
     
-    // Ensure hero is set with latest values from Setup
     const currentHero = useGameStore.getState().hero;
-    if (currentHero) {
-         setHero({ ...currentHero, name, coreFear: fear });
-    }
+    if (currentHero) setHero({ ...currentHero, name, coreFear: fear });
 
     setIsTransitioning(true);
     
@@ -307,6 +281,7 @@ EXECUTE GRAPH OF THOUGHTS:
     setComicFaces([coverFace]);
     generatingPages.current.add(0);
 
+    // Generate cover
     generateSinglePage('cover', 0, 'cover').finally(() => generatingPages.current.delete(0));
     
     setTimeout(async () => {
@@ -357,15 +332,8 @@ EXECUTE GRAPH OF THOUGHTS:
   const handleHeroUpload = useCallback(async (file: File) => {
        try { 
          const base64 = await fileToBase64(file); 
-         // Preserve existing fields if they exist
          const existing = useGameStore.getState().hero;
-         setHero({ 
-             base64, 
-             desc: "The Subject", 
-             name: existing?.name || "Nico", 
-             archetype: 'Subject', 
-             bio: existing?.bio || "A defiant student." 
-         }); 
+         setHero({ base64, desc: "The Subject", name: existing?.name || "Nico", archetype: 'Subject', bio: existing?.bio || "A defiant student." }); 
          SoundManager.play('success');
        } catch (e) { alert("Subject upload failed"); }
   }, []);
@@ -374,13 +342,7 @@ EXECUTE GRAPH OF THOUGHTS:
        try { 
          const base64 = await fileToBase64(file); 
          const existing = useGameStore.getState().friend;
-         setFriend({ 
-             base64, 
-             desc: "The Ally", 
-             name: existing?.name || "Elara", 
-             archetype: 'Ally', 
-             bio: existing?.bio || "A fragile scholar who knows too much." 
-         }); 
+         setFriend({ base64, desc: "The Ally", name: existing?.name || "Elara", archetype: 'Ally', bio: existing?.bio || "A fragile scholar." }); 
          SoundManager.play('success');
        } catch (e) { alert("Ally upload failed"); }
   }, []);

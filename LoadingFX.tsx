@@ -38,7 +38,13 @@ export const LoadingFX: React.FC = () => {
             {particles.map(p => (
                 <div key={p.id} 
                      className={`absolute font-comic text-5xl md:text-7xl font-bold ${p.color} select-none whitespace-nowrap z-10`}
-                     style={{ left: p.x, top: p.y, '--rot': `${p.rot}deg`, animation: 'comic-pop 1.8s forwards ease-out', textShadow: '3px 3px 0px black, 0 0 20px rgba(255,255,255,0.8)' } as React.CSSProperties}>
+                     style={{ 
+                         left: p.x, 
+                         top: p.y, 
+                         '--rot': `${p.rot}deg`, 
+                         animation: 'comic-pop 1.8s forwards ease-out', 
+                         textShadow: '3px 3px 0px black, 0 0 20px rgba(255,255,255,0.8)' 
+                     } as React.CSSProperties}>
                     {p.text}
                 </div>
             ))}

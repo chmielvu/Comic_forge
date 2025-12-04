@@ -22,12 +22,11 @@ interface BookProps {
 }
 
 export const Book: React.FC<BookProps> = React.memo((props) => {
-    // Memoize the sheet structure calculation. 
-    // Optimization: Convert array to Map for O(1) lookup to avoid nested loops.
+    // Optimization: Use a Map for O(1) lookup to prevent performance degradation as page count grows.
     const allSheets = useMemo(() => {
         const sheets = [];
         if (props.comicFaces.length > 0) {
-            // Create lookup map
+            // Create efficient lookup map
             const faceMap = new Map<number, ComicFace>();
             props.comicFaces.forEach(f => {
                 if (f.pageIndex !== undefined) faceMap.set(f.pageIndex, f);
@@ -52,16 +51,10 @@ export const Book: React.FC<BookProps> = React.memo((props) => {
     }, [props.comicFaces, props.isSetupVisible]);
 
     // DOM Windowing / Virtualization
-    // Only render sheets that are visible or adjacent.
-    // Index 0 is the cover. Index 2 is page 2/3.
-    // The book transform depends on currentSheetIndex.
-    // We render previous, current, and next sheet.
+    // Only render sheets that are visible or immediately adjacent.
     const sheetsToRender = allSheets.filter(sheet => {
-        // Always render the active sheet, the one before it, and the one after it
-        // This handles the flip animation smoothly.
         const diff = Math.abs(sheet.index - props.currentSheetIndex);
-        // Allow a wider range (e.g., 4) to ensure shadows/stacking look correct during fast flips
-        return diff <= 4 || sheet.index === 0; // Always keep cover for stack visuals if close
+        return diff <= 4 || sheet.index === 0; // Always keep cover for visual stack height
     });
 
     return (

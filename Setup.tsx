@@ -24,7 +24,8 @@ interface SetupProps {
     onSoundChange: (val: boolean) => void;
 }
 
-const SetupComponent: React.FC<SetupProps> = (props) => {
+// Optimization: Memoize to prevent re-renders when parent generates pages in background
+const SetupComponent: React.FC<SetupProps> = React.memo((props) => {
     const [subjectName, setSubjectName] = useState("Nico");
     const [coreFear, setCoreFear] = useState("Public Humiliation");
 
@@ -36,23 +37,23 @@ const SetupComponent: React.FC<SetupProps> = (props) => {
 
     const loadPresets = () => {
         SoundManager.play('click');
-        // Preset Subject
+        // Preset Subject (Hero)
         props.setHero({
             base64: undefined, // No image, rely on bio
             name: "Nico",
             archetype: "Subject",
             coreFear: "Failure",
-            bio: "A defiant student refusing to break, hiding a deep fear of inadequacy behind arrogance."
+            bio: "A defiant student refusing to break, hiding a deep fear of inadequacy behind arrogance. He has bruises on his ribs and a defiant sneer."
         });
         setSubjectName("Nico");
         setCoreFear("Failure");
 
-        // Preset Ally
+        // Preset Ally (Female, Fragile Scholar)
         props.setFriend({
             base64: undefined,
             name: "Elara",
             archetype: "Ally",
-            bio: "A fragile scholar who knows too much about the Forge's history. Delicate, anxious, but fiercely intelligent.",
+            bio: "A fragile female scholar who knows too much about the Forge's history. Delicate features, messy dark hair, anxious but fiercely intelligent. Wearing an oversized, ink-stained shirt.",
             desc: "The Ally"
         });
     };
@@ -67,7 +68,7 @@ const SetupComponent: React.FC<SetupProps> = (props) => {
                  pointerEvents: props.isTransitioning ? 'none' : 'auto'
              }}>
           <div className="min-h-full flex items-center justify-center p-4">
-            <div className="max-w-[800px] w-full border-[1px] border-[#4a3626] p-8 bg-[#1a1a1a] shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
+            <div className="max-w-[900px] w-full border-[1px] border-[#4a3626] p-6 md:p-8 bg-[#1a1a1a] shadow-[0_0_50px_rgba(0,0,0,0.8)] relative">
                 
                 {/* Decorative Corners */}
                 <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-[#d4af37]"></div>
@@ -87,20 +88,20 @@ const SetupComponent: React.FC<SetupProps> = (props) => {
                     <p className="text-sm md:text-base text-gray-400 tracking-[0.2em] uppercase font-comic">Codex of the Corrupted Curriculum</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
                     
                     {/* Left: The Subject */}
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 bg-[#0f0f0f] p-4 border border-[#333]">
                         <div className="border-b border-[#4a3626] pb-2 mb-2">
                             <h2 className="text-xl uppercase tracking-wider text-[#d4af37] font-title">I. The Subject</h2>
                             <p className="text-xs text-gray-500 italic">"The raw ore to be refined."</p>
                         </div>
                         
-                        <div className="flex gap-4 items-start bg-[#0f0f0f] p-4 border border-[#333]">
+                        <div className="flex gap-4 items-start">
                              {props.hero?.base64 ? (
-                                <img src={`data:image/jpeg;base64,${props.hero.base64}`} alt="Subject" className="w-20 h-20 object-cover grayscale opacity-80 border border-[#333]" />
+                                <img src={`data:image/jpeg;base64,${props.hero.base64}`} alt="Subject" className="w-24 h-24 object-cover grayscale opacity-80 border border-[#333]" />
                              ) : (
-                                <div className="w-20 h-20 bg-[#1a1a1a] border border-[#333] flex items-center justify-center text-[#333] font-bold text-2xl">?</div>
+                                <div className="w-24 h-24 bg-[#1a1a1a] border border-[#333] flex items-center justify-center text-[#333] font-bold text-2xl">?</div>
                              )}
                              <div className="flex flex-col gap-2 w-full">
                                  {props.hero ? <span className="text-green-800 font-bold text-[10px] uppercase tracking-widest">Identified</span> : <span className="text-red-900 font-bold text-[10px] uppercase tracking-widest">Missing</span>}
@@ -112,48 +113,50 @@ const SetupComponent: React.FC<SetupProps> = (props) => {
                         </div>
 
                         <div className="space-y-3 mt-2">
-                            <div>
-                                <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Name</label>
-                                <input 
-                                    type="text" 
-                                    value={subjectName}
-                                    onChange={(e) => setSubjectName(e.target.value)}
-                                    className="w-full bg-[#0f0f0f] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none font-serif"
-                                />
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Name</label>
+                                    <input 
+                                        type="text" 
+                                        value={subjectName}
+                                        onChange={(e) => setSubjectName(e.target.value)}
+                                        className="w-full bg-[#0a0a0a] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none font-serif"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Core Fear</label>
+                                    <input 
+                                        type="text" 
+                                        value={coreFear}
+                                        onChange={(e) => setCoreFear(e.target.value)}
+                                        className="w-full bg-[#0a0a0a] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none font-serif"
+                                    />
+                                </div>
                             </div>
                             <div>
-                                <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Core Fear</label>
-                                <input 
-                                    type="text" 
-                                    value={coreFear}
-                                    onChange={(e) => setCoreFear(e.target.value)}
-                                    className="w-full bg-[#0f0f0f] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none font-serif"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Bio / History</label>
+                                <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Character Bio (Appearance & Psyche)</label>
                                 <textarea 
                                     value={props.hero?.bio || ""}
                                     onChange={(e) => props.onUpdateHero({ bio: e.target.value })}
-                                    placeholder="Brief backstory..."
-                                    className="w-full bg-[#0f0f0f] border border-[#333] text-gray-400 p-2 text-sm focus:border-[#7c0a0a] focus:outline-none h-20 resize-none font-serif italic"
+                                    placeholder="Describe the subject's appearance and mental state..."
+                                    className="w-full bg-[#0a0a0a] border border-[#333] text-gray-400 p-2 text-sm focus:border-[#7c0a0a] focus:outline-none h-24 resize-none font-serif italic leading-relaxed"
                                 />
                             </div>
                         </div>
                     </div>
 
                     {/* Right: The Ally */}
-                    <div className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-4 bg-[#0f0f0f] p-4 border border-[#333]">
                         <div className="border-b border-[#4a3626] pb-2 mb-2">
-                            <h2 className="text-xl uppercase tracking-wider text-[#d4af37] font-title">II. Fragile Ally</h2>
+                            <h2 className="text-xl uppercase tracking-wider text-[#d4af37] font-title">II. The Ally</h2>
                             <p className="text-xs text-gray-500 italic">"A weakness to be exploited."</p>
                         </div>
 
-                        <div className="flex gap-4 items-start bg-[#0f0f0f] p-4 border border-[#333]">
+                        <div className="flex gap-4 items-start">
                             {props.friend?.base64 ? (
-                                <img src={`data:image/jpeg;base64,${props.friend.base64}`} alt="Ally" className="w-20 h-20 object-cover grayscale opacity-80 border border-[#333]" />
+                                <img src={`data:image/jpeg;base64,${props.friend.base64}`} alt="Ally" className="w-24 h-24 object-cover grayscale opacity-80 border border-[#333]" />
                             ) : (
-                                <div className="w-20 h-20 bg-[#1a1a1a] border border-[#333] flex items-center justify-center text-[#333] font-bold text-2xl">?</div>
+                                <div className="w-24 h-24 bg-[#1a1a1a] border border-[#333] flex items-center justify-center text-[#333] font-bold text-2xl">?</div>
                             )}
                             <div className="flex flex-col gap-2 w-full">
                                 {props.friend ? <span className="text-green-800 font-bold text-[10px] uppercase tracking-widest">Identified</span> : <span className="text-gray-600 font-bold text-[10px] uppercase tracking-widest">Optional</span>}
@@ -172,26 +175,18 @@ const SetupComponent: React.FC<SetupProps> = (props) => {
                                     value={props.friend?.name || ""}
                                     onChange={(e) => props.onUpdateFriend({ name: e.target.value })}
                                     placeholder="Ally Name"
-                                    className="w-full bg-[#0f0f0f] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none font-serif"
+                                    className="w-full bg-[#0a0a0a] border border-[#333] text-[#d4af37] p-2 text-sm focus:border-[#7c0a0a] focus:outline-none font-serif"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Bio / Relation</label>
+                                <label className="block text-xs uppercase tracking-widest text-gray-500 mb-1">Bio / Relation (Appearance & Psyche)</label>
                                 <textarea 
                                     value={props.friend?.bio || ""}
                                     onChange={(e) => props.onUpdateFriend({ bio: e.target.value })}
-                                    placeholder="How do they know the Subject?"
-                                    className="w-full bg-[#0f0f0f] border border-[#333] text-gray-400 p-2 text-sm focus:border-[#7c0a0a] focus:outline-none h-20 resize-none font-serif italic"
+                                    placeholder="Describe the ally's appearance and relationship to the Subject..."
+                                    className="w-full bg-[#0a0a0a] border border-[#333] text-gray-400 p-2 text-sm focus:border-[#7c0a0a] focus:outline-none h-24 resize-none font-serif italic leading-relaxed"
                                 />
                             </div>
-                        </div>
-                        
-                        <div className="mt-auto p-4 bg-[#0f0f0f] border-l-2 border-[#7c0a0a]">
-                            <p className="text-xs text-gray-400 leading-relaxed font-serif italic">
-                                "The institution is not merely a prison; it is an elite Academy of Behavioral Reconstruction. We do not seek to kill the man, but to burn away the dross."
-                                <br/><br/>
-                                — Magistra Selene
-                            </p>
                         </div>
                     </div>
                 </div>
@@ -224,6 +219,6 @@ const SetupComponent: React.FC<SetupProps> = (props) => {
           </div>
         </div>
     );
-};
+});
 
-export const Setup = React.memo(SetupComponent);
+export const Setup = SetupComponent; // Export memoized component
