@@ -1,13 +1,13 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ComicFace, Archetype } from './types';
 import { LoadingFX } from './LoadingFX';
 import { SoundManager } from './SoundEngine';
+import { ThoughtChainVisualizer } from './ThoughtChainVisualizer'; // NEW
 
 interface PanelProps {
     face?: ComicFace;
@@ -17,6 +17,46 @@ interface PanelProps {
     onReset: () => void;
     isGatePageReady: boolean; // Replaces allFaces to fix memoization
 }
+
+// NEW: ChoiceButton component for interactive choice preview
+interface ChoiceButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+    choice: string;
+    onHover: (isHovering: boolean) => void;
+    ledgerImpact?: { hope: number, trauma: number }; // Predicted impact
+}
+
+const ChoiceButton: React.FC<ChoiceButtonProps> = ({ choice, onHover, ledgerImpact, ...rest }) => {
+    const [isHovered, setIsHovered] = useState(false);
+
+    return (
+        <button 
+            {...rest}
+            onMouseEnter={() => { setIsHovered(true); onHover(true); }}
+            onMouseLeave={() => { setIsHovered(false); onHover(false); }}
+            className={`
+                w-full py-3 px-4 text-base md:text-lg font-title uppercase tracking-widest border transition-all duration-300
+                ${rest.className} /* Allows for dynamic classes to be passed */
+                shadow-[0_10px_20px_rgba(0,0,0,0.8)] relative overflow-hidden
+            `}
+        >
+            <span className="relative z-10">{choice}</span>
+            
+            {/* Consequence Preview Tooltip */}
+            {isHovered && ledgerImpact && (
+                <div className="absolute -top-16 left-1/2 -translate-x-1/2 bg-black/90 border border-[#d4af37] p-2 text-xs whitespace-nowrap animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
+                    <div className="flex gap-3">
+                        <span className={ledgerImpact.hope > 0 ? 'text-green-400' : 'text-red-400'}>
+                            Hope: {ledgerImpact.hope > 0 ? '+' : ''}{ledgerImpact.hope}
+                        </span>
+                        <span className={ledgerImpact.trauma > 0 ? 'text-red-400' : 'text-red-400'}>
+                            Trauma: {ledgerImpact.trauma > 0 ? '+' : ''}{ledgerImpact.trauma}
+                        </span>
+                    </div>
+                </div>
+            )}
+        </button>
+    );
+};
 
 const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDownload, onReset, isGatePageReady }) => {
     if (!face) return <div className="w-full h-full bg-[#0a0a0a]" />; // Void color
@@ -92,6 +132,11 @@ const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDo
     return (
         <div className={`panel-container relative group w-full h-full flex items-center justify-center overflow-hidden ${isFullBleed ? '!p-0 !bg-[#0a0a0a]' : 'bg-[#e3dac9]'}`}>
             
+            {/* Thought Chain Visualizer (NEW) */}
+            {!isFullBleed && narrative && (
+                <ThoughtChainVisualizer beat={narrative} isLoading={face.isLoading} />
+            )}
+
             {/* Authentic Gloss Overlay */}
             <div className="gloss z-30 pointer-events-none absolute inset-0 mix-blend-screen opacity-40 bg-gradient-to-br from-white/10 to-transparent" />
             
@@ -114,7 +159,7 @@ const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDo
                     <button 
                         onClick={(e) => {
                             e.stopPropagation();
-                            if (face.audioBase64) SoundManager.playVoice(face.audioBase64);
+                            if (face.audioBase64) SoundManager.playVoice(face.audioBase64, face.id);
                         }}
                         className="bg-black/60 hover:bg-[#7c0a0a] text-[#d4af37] border border-[#d4af37] rounded-full p-3 transition-all transform hover:scale-110 backdrop-blur-sm shadow-lg group-hover:opacity-100 opacity-80"
                         title="Play Narration"
@@ -154,7 +199,7 @@ const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDo
                                     <div className="absolute -right-3 -top-3 w-6 h-6 flex items-center justify-center bg-black/80 rounded-full border border-[#d4af37] animate-pulse cursor-pointer pointer-events-auto"
                                          onClick={(e) => {
                                              e.stopPropagation();
-                                             if (face.audioBase64) SoundManager.playVoice(face.audioBase64);
+                                             if (face.audioBase64) SoundManager.playVoice(face.audioBase64, face.id);
                                          }}>
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
@@ -179,22 +224,28 @@ const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDo
                     <p className="text-[#d4af37] font-serif italic text-lg tracking-widest mb-1 drop-shadow-md animate-pulse text-center">
                         The moment of fracture...
                     </p>
-                    {face.choices.map((choice, i) => (
-                        <button 
-                            key={i} 
-                            onClick={(e) => { e.stopPropagation(); if(face.pageIndex) onChoice(face.pageIndex, choice); }}
-                            className={`
-                                w-full py-3 px-4 text-base md:text-lg font-title uppercase tracking-widest border transition-all duration-300
-                                ${i === 0 
+                    {face.choices.map((choice, i) => {
+                        // PREDICT impact using simple heuristics (or call Analyst in future)
+                        const impact = { 
+                            hope: choice.toLowerCase().includes('resist') ? 5 : -10,
+                            trauma: choice.toLowerCase().includes('submit') ? 15 : 5
+                        };
+                        return (
+                            <ChoiceButton
+                                key={i} 
+                                choice={choice}
+                                ledgerImpact={impact}
+                                onHover={(hovering) => {
+                                    if (hovering) SoundManager.play('hover');
+                                }}
+                                onClick={(e) => { e.stopPropagation(); if(face.pageIndex) onChoice(face.pageIndex, choice); }}
+                                className={i === 0 
                                     ? 'bg-[#2a0a0a] border-[#7c0a0a] text-[#e3dac9] hover:bg-[#4a0a0a] hover:border-[#d4af37] hover:scale-[1.02]' 
                                     : 'bg-[#0a0a0a] border-[#333] text-[#999] hover:bg-[#1a1a1a] hover:text-white hover:border-white hover:scale-[1.02]' 
                                 }
-                                shadow-[0_10px_20px_rgba(0,0,0,0.8)] relative overflow-hidden
-                            `}
-                        >
-                            {choice}
-                        </button>
-                    ))}
+                            />
+                        );
+                    })}
                 </div>
             )}
 
@@ -244,30 +295,38 @@ const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDo
 };
 
 export const Panel = React.memo(PanelComponent, (prevProps, nextProps) => {
-    // Custom Comparator for React.memo
-    // Returns true if props are equal (do NOT re-render)
-    // Returns false if props are different (DO re-render)
-
-    // 1. Check simple booleans/references that come from parent
+    // Fast path: Reference equality check first
+    if (prevProps === nextProps) return true;
+    
+    // Boolean checks (cheapest)
     if (prevProps.isGatePageReady !== nextProps.isGatePageReady) return false;
     
-    // 2. Check Face integrity
+    // Face checks (medium cost)
     const pFace = prevProps.face;
     const nFace = nextProps.face;
-
-    if (pFace === nFace) return true; // Same reference
-    if (!pFace || !nFace) return pFace === nFace; // Handle undefined/nulls
-
-    // Deep check specific fields that affect rendering
-    if (pFace.id !== nFace.id) return false;
+    
+    if (pFace === nFace) return true;
+    if (!pFace || !nFace) return false;
+    
+    // Deep checks (most expensive, order by likelihood of change)
     if (pFace.isLoading !== nFace.isLoading) return false;
     if (pFace.imageUrl !== nFace.imageUrl) return false;
     if (pFace.resolvedChoice !== nFace.resolvedChoice) return false;
+    
+    // Audio check (added field)
     if (pFace.audioBase64 !== nFace.audioBase64) return false;
     
-    // Check narrative content (dialogue/caption changes)
-    if (pFace.narrative?.dialogue !== nFace.narrative?.dialogue) return false;
-    if (pFace.narrative?.caption !== nFace.narrative?.caption) return false;
+    // Narrative checks (likely to change)
+    const pNarr = pFace.narrative;
+    const nNarr = nFace.narrative;
+    if (pNarr === nNarr) return true;
+    if (!pNarr || !nNarr) return pNarr === nNarr;
+    
+    // Only check fields that affect rendering
+    if (pNarr.dialogue !== nNarr.dialogue) return false;
+    if (pNarr.caption !== nNarr.caption) return false;
+    if (pNarr.focus_char !== nNarr.focus_char) return false; // For voice styling
+    if (pNarr.thought_chain !== nNarr.thought_chain) return false; // For visualizer
 
-    return true; 
+    return true;
 });

@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -15,6 +14,7 @@ import { LoreEngine } from './LoreEngine';
 import { VisualBible } from './VisualBible';
 import { useGameStore } from './store';
 import { TTSService } from './TTSService';
+import { ImageCache } from './ImageCache';
 
 // --- Constants ---
 const MODEL_IMAGE_GEN_NAME = "gemini-2.5-flash-image"; 
@@ -156,16 +156,159 @@ const App: React.FC = () => {
       }
   };
 
-  // Stage 3: The Renderer (Assets) & Vision Audit
-  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type']) => {
+  // Utility to split a single image into two halves (for 2-panel spreads)
+  const splitGridImage = async (gridImageBase64: string, numPanels: number): Promise<string[]> => {
+      return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+              const canvas = document.createElement('canvas');
+              const ctx = canvas.getContext('2d');
+              if (!ctx) { reject("Canvas not supported"); return; }
+
+              const panelWidth = img.width / numPanels;
+              canvas.height = img.height;
+
+              const results: string[] = [];
+              for (let i = 0; i < numPanels; i++) {
+                  canvas.width = panelWidth;
+                  ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear before drawing
+                  ctx.drawImage(img, i * panelWidth, 0, panelWidth, img.height, 0, 0, panelWidth, img.height);
+                  results.push(canvas.toDataURL('image/jpeg', 0.95));
+              }
+              resolve(results);
+          };
+          img.onerror = reject;
+          img.src = gridImageBase64;
+      });
+  };
+
+  const generateImageRaw = async (prompt: string, hero: Persona | null, friend: Persona | null, styleRefBase64?: string): Promise<string> => {
+    const contents: any[] = []; // Using 'any' for flexibility with mixed text/inlineData
+    
+    // CRITICAL: Parse the JSON prompt string back to object for proper handling
+    let promptObj: any;
+    try {
+        promptObj = JSON.parse(prompt);
+    } catch {
+        // Fallback for legacy string prompts
+        promptObj = { header: VisualBible.ZERO_DRIFT_HEADER, raw_prompt: prompt };
+    }
+
+    // REF UPLOAD STRATEGY (from your tricks doc: "Ref Upload for Char Preservation")
+    if (hero?.base64) {
+        contents.push({ 
+            text: `REFERENCE_ID_1 (Subject/Hero): Lock 100% facial features, hair texture, build, skin tone, clothing details. Use for character consistency across ALL panels.`,
+            inlineData: { mimeType: 'image/jpeg', data: hero.base64 } 
+        });
+    }
+    
+    if (friend?.base64) {
+        contents.push({ 
+            text: `REFERENCE_ID_2 (Ally/Friend): Lock 100% facial features, hair, proportions, clothing details. Secondary character consistency anchor.`,
+            inlineData: { mimeType: 'image/jpeg', data: friend.base64 } 
+        });
+    }
+
+    if (styleRefBase64) {
+        contents.push({
+            text: "STYLE_REFERENCE: Match EXACT style from this image: color grading, lighting logic, texture quality, line weight consistency. Apply to ALL elements.",
+            inlineData: { mimeType: 'image/jpeg', data: styleRefBase64 }
+        });
+    }
+
+    // CRITICAL: Meta-prompt wrapper for Nano Banana adherence (from tricks: "JSON Schemas for Panels")
+    const metaPrompt = {
+        schema_lock: "ENFORCE_ALL_PARAMETERS. Strictly adhere to provided JSON structure. DO NOT deviate.",
+        identity_anchors: [
+            hero ? "REFERENCE_ID_1" : null,
+            friend ? "REFERENCE_ID_2" : null
+        ].filter(Boolean),
+        ...(styleRefBase64 ? { style_anchor: "STYLE_REFERENCE" } : {}),
+        ...promptObj,
+        // Add negative prompt enforcement
+        critical_negatives: [
+            ...(VisualBible.VISUAL_MANDATE.negative.split(',').map(n => n.trim())),
+            "character drift", "face morph", "inconsistent anatomy", "extra limbs",
+            "modern clothing", "smartphones", "cars", "neon signs", "text", "watermark",
+            "ugly", "deformed", "blurry", "low res", "out of frame"
+        ],
+        quality_lock: ["masterpiece", "8k", "sharp focus", "anatomical accuracy", "professional comic art", "high detail", "cinematic"]
+    };
+
+    contents.push({ text: JSON.stringify(metaPrompt, null, 2) });
+
+    try {
+        const ai = getAI();
+        const res = await ai.models.generateContent({ 
+            model: MODEL_IMAGE_GEN_NAME, 
+            contents, 
+            config: {
+                // CRITICAL: Set these for consistency (from GAIS KB)
+                temperature: 0.4, // Lower for consistency, not 0 to allow creative interpretation
+                topP: 0.95,
+                topK: 40
+            }
+        });
+        
+        const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+        return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
+    } catch (e) {
+        handleAPIError(e);
+        return '';
+    }
+  };
+
+  // Helper function to extract character face from an image (for consistency reset)
+  const extractCharacterFace = useCallback(async (imageUrl: string): Promise<string> => {
+      return new Promise((resolve) => {
+          const img = new Image();
+          img.onload = () => {
+              const canvas = document.createElement('canvas');
+              // Assume face is in upper-center third of image
+              const faceWidth = img.width * 0.4;
+              const faceHeight = img.height * 0.35;
+              const faceX = (img.width - faceWidth) / 2;
+              const faceY = img.height * 0.15;
+              
+              canvas.width = faceWidth;
+              canvas.height = faceHeight;
+              const ctx = canvas.getContext('2d')!;
+              
+              ctx.drawImage(img, faceX, faceY, faceWidth, faceHeight, 0, 0, faceWidth, faceHeight);
+              
+              resolve(canvas.toDataURL('image/jpeg', 0.95).split(',')[1]);
+          };
+          img.onerror = () => resolve(''); // Resolve with empty string on error
+          img.src = imageUrl;
+      });
+  }, []);
+
+  // Stage 3: The Renderer (Assets) & Vision Audit for single page
+  const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type'], styleRefBase64?: string) => {
       const isDecision = DECISION_PAGES.includes(pageNum);
       const state = useGameStore.getState();
+
+      // Enforce consistency reset every 5 pages
+      if (pageNum % 5 === 0 && pageNum > 0 && type === 'story') {
+          const lastHeroPanel = state.comicFaces
+              .filter(f => f.imageUrl && f.narrative?.focus_char === 'Subject' && (f.pageIndex || 0) < pageNum)
+              .slice(-1)[0];
+          
+          if (lastHeroPanel?.imageUrl && state.hero) {
+              const heroFaceRef = await extractCharacterFace(lastHeroPanel.imageUrl);
+              if (heroFaceRef) {
+                  setHero({ ...state.hero, base64: heroFaceRef });
+                  console.log(`Hero face re-captured from page ${lastHeroPanel.pageIndex} for consistency.`);
+              }
+          }
+      }
 
       if (type === 'cover' || type === 'back_cover') {
          // Specialized handling for covers (legacy/simple)
          const prompt = type === 'cover' ? VisualBible.getCoverPrompt() : VisualBible.getBackCoverPrompt();
-         const image = await generateImageRaw(prompt, state.hero, state.friend);
-         useGameStore.getState().updateFaceState(faceId, { imageUrl: image, isLoading: false, type });
+         const image = await generateImageRaw(prompt, state.hero, state.friend, styleRefBase64);
+         updateFaceState(faceId, { imageUrl: image, isLoading: false, type });
+         if (image) ImageCache.preload(image);
          return;
       }
 
@@ -176,28 +319,30 @@ const App: React.FC = () => {
       const { directorOut, beat } = await runDirector(pageNum, isDecision, analystOut);
       
       // Update UI with text immediately
-      useGameStore.getState().updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
+      updateFaceState(faceId, { narrative: { ...beat, thought_chain: `Analyst: ${analystOut.strategy} -> Director: ${directorOut.visuals.camera}` }, choices: beat.choices, isDecisionPage: isDecision });
 
       // 3. Render Image using Director's Visuals
-      const visualPrompt = VisualBible.constructDirectorPrompt(directorOut, beat, !!state.hero, !!state.friend);
+      let visualPrompt = VisualBible.constructDirectorPrompt(directorOut, beat, !!state.hero, !!state.friend);
       // Append Character context for style consistency
-      let finalPrompt = visualPrompt;
-      if (state.hero?.bio) finalPrompt += `\nSUBJECT CONTEXT: ${state.hero.bio}`;
-      if (state.friend?.bio) finalPrompt += `\nALLY CONTEXT: ${state.friend.bio}`;
+      // Note: constructDirectorPrompt now includes character bios if present.
 
-      const image = await generateImageRaw(finalPrompt, state.hero, state.friend);
+      const image = await generateImageRaw(visualPrompt, state.hero, state.friend, styleRefBase64);
       
       // 4. Render Audio
       let audioBase64: string | undefined;
       if (beat.dialogue || beat.caption) {
-          audioBase64 = (await TTSService.generateSpeech(beat.dialogue || beat.caption || "", beat.focus_char)) || undefined;
+          // Pass target emotion for nuanced TTS delivery, and faceId for audio management
+          audioBase64 = (await TTSService.generateSpeech(beat.dialogue || beat.caption || "", beat.focus_char, analystOut.target_emotion, faceId)) || undefined;
       }
 
-      useGameStore.getState().updateFaceState(faceId, { 
+      updateFaceState(faceId, { 
           imageUrl: image, 
           audioBase64,
           isLoading: false 
       });
+
+      // Preload image
+      if (image) ImageCache.preload(image);
 
       // 5. Vision-to-State Reconciliation (The Multimodal Feedback Loop)
       // We do this asynchronously to not block the UI
@@ -213,21 +358,86 @@ const App: React.FC = () => {
       }
   };
 
-  const generateImageRaw = async (prompt: string, hero: Persona | null, friend: Persona | null): Promise<string> => {
-    const contents = [];
-    if (hero?.base64) contents.push({ text: "REFERENCE 1:", inlineData: { mimeType: 'image/jpeg', data: hero.base64 } });
-    if (friend?.base64) contents.push({ text: "REFERENCE 2:", inlineData: { mimeType: 'image/jpeg', data: friend.base64 } });
-    contents.push({ text: prompt });
+  // New: Generate a spread of two pages in one go for consistency
+  const generatePageSpread = async (leftPageNum: number, rightPageNum: number) => {
+      const state = useGameStore.getState();
+      const leftFaceId = `page-${leftPageNum}`;
+      const rightFaceId = `page-${rightPageNum}`;
 
-    try {
-        const ai = getAI();
-        const res = await ai.models.generateContent({ model: MODEL_IMAGE_GEN_NAME, contents, config: {} });
-        const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-        return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
-    } catch (e) {
-        handleAPIError(e);
-        return '';
-    }
+      // Mark as loading
+      updateFaceState(leftFaceId, { isLoading: true });
+      updateFaceState(rightFaceId, { isLoading: true });
+      
+      const prevPage = state.comicFaces.find(f => f.pageIndex === leftPageNum - 1);
+      let styleRefBase64: string | undefined;
+      if (prevPage?.imageUrl) styleRefBase64 = prevPage.imageUrl.split(',')[1];
+
+      // Enforce consistency reset for the left page, which sets the tone for the spread
+      if (leftPageNum % 5 === 0 && leftPageNum > 0) {
+          const lastHeroPanel = state.comicFaces
+              .filter(f => f.imageUrl && f.narrative?.focus_char === 'Subject' && (f.pageIndex || 0) < leftPageNum)
+              .slice(-1)[0];
+          
+          if (lastHeroPanel?.imageUrl && state.hero) {
+              const heroFaceRef = await extractCharacterFace(lastHeroPanel.imageUrl);
+              if (heroFaceRef) {
+                  setHero({ ...state.hero, base64: heroFaceRef });
+                  console.log(`Hero face re-captured from page ${lastHeroPanel.pageIndex} for consistency.`);
+              }
+          }
+      }
+
+      // 1. Run Analyst for both pages
+      const analystLeft = await runAnalyst(leftPageNum);
+      const analystRight = await runAnalyst(rightPageNum);
+      
+      // 2. Run Director for both pages
+      const { directorOut: dirLeft, beat: beatLeft } = await runDirector(leftPageNum, DECISION_PAGES.includes(leftPageNum), analystLeft);
+      const { directorOut: dirRight, beat: beatRight } = await runDirector(rightPageNum, DECISION_PAGES.includes(rightPageNum), analystRight);
+
+      // Update UI with text immediately
+      updateFaceState(leftFaceId, { narrative: { ...beatLeft, thought_chain: `Analyst: ${analystLeft.strategy} -> Director: ${dirLeft.visuals.camera}` }, choices: beatLeft.choices, isDecisionPage: DECISION_PAGES.includes(leftPageNum) });
+      updateFaceState(rightFaceId, { narrative: { ...beatRight, thought_chain: `Analyst: ${analystRight.strategy} -> Director: ${dirRight.visuals.camera}` }, choices: beatRight.choices, isDecisionPage: DECISION_PAGES.includes(rightPageNum) });
+
+
+      // 3. Generate a single grid image for the spread
+      const gridPrompt = VisualBible.get2PanelSpreadPrompt(
+        { director: dirLeft, beat: beatLeft, position: 'left', hero: state.hero, friend: state.friend },
+        { director: dirRight, beat: beatRight, position: 'right', hero: state.hero, friend: state.friend }
+      );
+      const gridImage = await generateImageRaw(gridPrompt, state.hero, state.friend, styleRefBase64);
+      const [leftImg, rightImg] = await splitGridImage(gridImage, 2);
+
+      // 4. Render Audio for both pages
+      const audioLeftPromise = (beatLeft.dialogue || beatLeft.caption) 
+          ? TTSService.generateSpeech(beatLeft.dialogue || beatLeft.caption || "", beatLeft.focus_char, analystLeft.target_emotion, leftFaceId)
+          : Promise.resolve(undefined);
+      const audioRightPromise = (beatRight.dialogue || beatRight.caption) 
+          ? TTSService.generateSpeech(beatRight.dialogue || beatRight.caption || "", beatRight.focus_char, analystRight.target_emotion, rightFaceId)
+          : Promise.resolve(undefined);
+      
+      const [audioLeft, audioRight] = await Promise.all([audioLeftPromise, audioRightPromise]);
+
+      updateFaceState(leftFaceId, { 
+          imageUrl: leftImg, 
+          audioBase64: audioLeft,
+          isLoading: false 
+      });
+      updateFaceState(rightFaceId, { 
+          imageUrl: rightImg, 
+          audioBase64: audioRight,
+          isLoading: false 
+      });
+
+      // Preload images
+      if (leftImg) ImageCache.preload(leftImg);
+      if (rightImg) ImageCache.preload(rightImg);
+
+      // 5. Vision-to-State Reconciliation (Simulated)
+      updateLedger({
+          trauma: Math.min(100, state.ledger.trauma + (analystLeft.target_emotion === 'Despair' ? 5 : 0) + (analystRight.target_emotion === 'Despair' ? 5 : 0)),
+          hope: Math.max(0, state.ledger.hope - (analystLeft.strategy.includes("Break") ? 5 : 0) - (analystRight.strategy.includes("Break") ? 5 : 0))
+      });
   };
 
   // --- Core Lifecycle ---
@@ -241,29 +451,74 @@ const App: React.FC = () => {
           }
       }
       if (pagesToGen.length === 0) return;
+      
+      // Mark ALL pages as generating BEFORE creating faces
       pagesToGen.forEach(p => generatingPages.current.add(p));
 
-      const newFaces: ComicFace[] = [];
-      pagesToGen.forEach(pageNum => {
-          const type = pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story';
-          newFaces.push({ id: `page-${pageNum}`, type, choices: [], isLoading: true, pageIndex: pageNum });
-      });
+      const newFaces: ComicFace[] = pagesToGen.map(pageNum => ({
+          id: `page-${pageNum}`,
+          type: pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story',
+          choices: [],
+          isLoading: true,
+          pageIndex: pageNum
+      }));
 
+      // ATOMIC UPDATE: Use functional setter to avoid race conditions
       setComicFaces((prev) => {
           const existing = new Set(prev.map(f => f.id));
-          return [...prev, ...newFaces.filter(f => !existing.has(f.id))];
+          const toAdd = newFaces.filter(f => !existing.has(f.id));
+          return [...prev, ...toAdd];
       });
 
-      try {
-          // Generate sequentially to maintain narrative state continuity (Agentic Chain)
-          for (const pageNum of pagesToGen) {
-               await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
-               generatingPages.current.delete(pageNum);
+      // Generate sequentially, prioritizing spreads
+      for (let i = 0; i < pagesToGen.length; i++) {
+          const pageNum = pagesToGen[i];
+          const faceId = `page-${pageNum}`;
+          const type = pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story';
+          
+          try {
+              if (type === 'story' && pageNum % 2 === 0 && (pageNum + 1) <= TOTAL_PAGES) { // Generate even page with next odd page as a spread
+                  if (pagesToGen.includes(pageNum + 1)) { // Only if the next page is also in this batch
+                      await generatePageSpread(pageNum, pageNum + 1);
+                      generatingPages.current.delete(pageNum);
+                      generatingPages.current.delete(pageNum + 1);
+                      i++; // Skip next page as it's already generated
+                  } else {
+                      await generateSinglePage(faceId, pageNum, type);
+                      generatingPages.current.delete(pageNum);
+                  }
+              } else { // Generate odd page alone, or covers/back covers
+                  await generateSinglePage(faceId, pageNum, type);
+                  generatingPages.current.delete(pageNum);
+              }
+          } catch (e) {
+              console.error(`Failed to generate page ${pageNum}:`, e);
+              // Mark as failed
+              updateFaceState(faceId, { 
+                  isLoading: false, 
+                  imageUrl: '', // Could set to error placeholder image
+                  narrative: { 
+                      scene: "Generation failed", 
+                      choices: [], 
+                      focus_char: 'Subject', 
+                      location: 'Error', 
+                      caption: "The narrative thread frayed..." 
+                  }
+              });
+          } finally {
+              generatingPages.current.delete(pageNum);
           }
-      } catch (e) {
-          console.error("Batch error", e);
-      } finally {
-          pagesToGen.forEach(p => generatingPages.current.delete(p));
+      }
+      
+      // Preload next batch after current batch is done
+      const maxGeneratedPage = Math.max(...pagesToGen); // This might be problematic if pagesToGen is empty after filtering
+      const nextBatchStart = maxGeneratedPage + 1;
+      if (nextBatchStart <= TOTAL_PAGES) {
+          const nextPages = Array.from({ length: Math.min(BATCH_SIZE, TOTAL_PAGES - nextBatchStart + 1) }, (_, i) => nextBatchStart + i);
+          ImageCache.preloadBatch(nextPages.map(p => {
+              const face = useGameStore.getState().comicFaces.find(f => f.pageIndex === p);
+              return face?.imageUrl || '';
+          }).filter(Boolean));
       }
   };
 
@@ -289,10 +544,11 @@ const App: React.FC = () => {
         setShowSetup(false);
         setIsTransitioning(false);
         setCurrentSheetIndex(1);
-        await generateBatch(1, INITIAL_PAGES);
-        generateBatch(3, 3);
+        // Generate page 1 (odd) and page 2 (even) as a spread
+        await generateBatch(1, INITIAL_PAGES); 
+        generateBatch(3, BATCH_SIZE); // Pre-generate next batch
     }, 2000);
-  }, []);
+  }, [extractCharacterFace, setHero, setIsTransitioning, setComicFaces, generateSinglePage, setIsStarted, setShowSetup, setCurrentSheetIndex, generateBatch]);
 
   const handleChoice = useCallback(async (pageIndex: number, choice: string) => {
       SoundManager.play('click');
@@ -304,14 +560,16 @@ const App: React.FC = () => {
       if (maxPage + 1 <= TOTAL_PAGES) {
           generateBatch(maxPage + 1, BATCH_SIZE);
       }
-  }, []);
+  }, [updateFaceState, generateBatch]);
 
   const resetApp = useCallback(() => {
       SoundManager.play('click');
       SoundManager.stopAmbience();
+      SoundManager.stopAllVoices(); // Stop all playing voices on reset
       resetStore();
       generatingPages.current.clear();
-  }, []);
+      ImageCache.clear(); // Clear image cache on reset
+  }, [resetStore]);
 
   const downloadPDF = useCallback(() => {
     SoundManager.play('click');
@@ -336,7 +594,7 @@ const App: React.FC = () => {
          setHero({ base64, desc: "The Subject", name: existing?.name || "Nico", archetype: 'Subject', bio: existing?.bio || "A defiant student." }); 
          SoundManager.play('success');
        } catch (e) { alert("Subject upload failed"); }
-  }, []);
+  }, [setHero]);
 
   const handleFriendUpload = useCallback(async (file: File) => {
        try { 
@@ -345,17 +603,17 @@ const App: React.FC = () => {
          setFriend({ base64, desc: "The Ally", name: existing?.name || "Elara", archetype: 'Ally', bio: existing?.bio || "A fragile scholar." }); 
          SoundManager.play('success');
        } catch (e) { alert("Ally upload failed"); }
-  }, []);
+  }, [setFriend]);
 
   const handleUpdateHero = useCallback((updates: Partial<Persona>) => {
       const current = useGameStore.getState().hero;
       if (current) setHero({ ...current, ...updates });
-  }, []);
+  }, [setHero]);
 
   const handleUpdateFriend = useCallback((updates: Partial<Persona>) => {
       const current = useGameStore.getState().friend;
       if (current) setFriend({ ...current, ...updates });
-  }, []);
+  }, [setFriend]);
 
   const handleSheetClick = useCallback((index: number) => {
       const state = useGameStore.getState();
@@ -370,7 +628,7 @@ const App: React.FC = () => {
          setCurrentSheetIndex(prev => prev + 1);
          SoundManager.play('flip');
       }
-  }, []);
+  }, [setCurrentSheetIndex, comicFaces]);
 
   const handleSoundToggle = useCallback((enabled: boolean) => {
       setSoundEnabled(enabled);
@@ -381,12 +639,12 @@ const App: React.FC = () => {
       } else {
           SoundManager.stopAmbience();
       }
-  }, []);
+  }, [setSoundEnabled]);
 
   const handleOpenBook = useCallback(() => {
       setCurrentSheetIndex(1); 
       SoundManager.play('flip');
-  }, []);
+  }, [setCurrentSheetIndex]);
 
   return (
     <div className="comic-scene">

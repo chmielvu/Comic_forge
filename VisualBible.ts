@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Beat, DirectorOutput, Persona } from './types';
+import { Beat, DirectorOutput, Persona, Archetype } from './types';
+import { GoogleGenAI } from '@google/genai'; // Required for refinePanel
 
 // --- I. THE ZERO-DRIFT AESTHETIC KERNEL ---
 
-const ZERO_DRIFT_HEADER = "((MASTER STYLE LOCK)): hyper-detailed 8K oil painting texture, soft digital brushwork, expressive linework, ((Milo Manara sensual elegance, Bruce Timm angular minimalism fusion)), dramatic Rembrandt Caravaggio lighting, shallow depth of field, clean sharp focus. (Technical Lock: intimate 85mm portrait lens, rim lighting on sweat-glistened skin). NO TEXT/WATERMARKS.";
+export const ZERO_DRIFT_HEADER = "((MASTER STYLE LOCK)): hyper-detailed 8K oil painting texture, soft digital brushwork, expressive linework, ((Milo Manara sensual elegance, Bruce Timm angular minimalism fusion)), dramatic Rembrandt Caravaggio lighting, shallow depth of field, clean sharp focus. (Technical Lock: intimate 85mm portrait lens, rim lighting on sweat-glistened skin). NO TEXT/WATERMARKS.";
 
-const VISUAL_MANDATE = {
+export const VISUAL_MANDATE = {
   style: "grounded dark erotic academia + baroque brutalism + vampire noir + intimate psychological tension + rembrandt caravaggio lighting + painterly anime-fusion gothic overlays. masterpiece, oil painting texture with soft digital brushwork, hyper-detailed fabrics and hair textures.",
   technical: "camera: intimate 50mm or 85mm close-up, shallow depth of field. lighting: single flickering gaslight or cold surgical lamp, deep shadows pooling in cleavage and skirt slits, volumetric fog, rim lighting on sweat/skin, subtle bruises visible.",
   mood: "predatory intimacy, clinical amusement, suffocating desire, weaponized sexuality, voyeuristic, non-consensual fear, unwilling arousal, languid dominance.",
@@ -48,7 +49,7 @@ const CHARACTER_DNA: Record<string, string> = {
   
   // Subjects: Broken Vessels
   'Subject': "Subject 84 (Male). Early 20s. Torn white shirt open to waist (exposed chest/abdomen, subtle bruises). Trousers low on hips revealing V-line. Sweat-slicked skin. Wrists lightly bound. Pose: Kneeling, looking up in non-consensual fear/arousal.",
-  'Ally': "The Ally (Female).  Tasked with being a housekeeper/servant. She wears a simple tunic and trousers. No bra underneath outlines her bust. ",
+  'Ally': "A fragile female scholar with long, light brown curly hair, fair skin, and striking green eyes, wearing a simple black ribbed crop top and a plaid mini-skirt. She carries an air of anxious intelligence, hinting at secrets she knows about the Forge.", // Reworked based on image
   'Guardian': "The Guardian (Male). Muscular, restrained. Shirt ripped at seams. Vibe: Stoic suffering with unwilling submission.",
   'Archivist': "The Archivist (Male). Hunched, hiding behind book. Ink-stained fingers. Vibe: Watchful tension.",
   'Ghost': "The Ghost (Male). Fading, hollow. Vibe: Dissociative desire.",
@@ -119,10 +120,27 @@ const VISUAL_MOTIFS = {
   IntenseGaze: "Piercing eyes with dramatic eyeliner, conveying predatory amusement or hidden rage.",
   BraidFreckles: "Loose blonde braid over shoulder, sun-kissed freckles on cheeks/nose for vulnerable yet defiant look.",
   CurlyPendant: "Wavy curly hair cascading, ornate pendant necklace dangling into cleavage, symbolizing forbidden knowledge.",
-  BookLace: "Open antique book with lace bookmarks, pages yellowed."
+  BookLace: "Open antique book with lace bookmarks, pages yellowed.",
+
+  // === NEW: POWER DYNAMICS (From Trope Analysis) ===
+  MedicalViolation: "Clinical white exam table, Subject restrained with leather straps at wrists/ankles. Custodian leaning over with stethoscope dangling into cleavage, gloved hand palpating abdomen with mix of professional detachment and voyeuristic intensity.",
+  PublicHumiliation: "Refectory scene: Subject kneeling center-frame on cold stone floor, Provost standing on dais above, goblet in hand. Other students watching from shadows. Single overhead light creating dramatic pool.",
+  IntimateInterrogation: "Tight 50mm close-up: Confessor's face inches from Subject's, her hand cupping his chin, forcing eye contact. Her lips parted mid-whisper, his pupils dilated despite clenched jaw.",
+  RitualPreparation: "Wide establishing shot: Calibration Chamber. Subject in center on granite slab, arms spread slightly. Inquisitor circling with riding crop, Logician taking notes in background. Chiaroscuro lighting from single surgical lamp.",
+  FalseComfort: "Infirmary bed: Subject lying down, Custodian sitting on edge applying ointment to visible bruises on torso. Her expression maternal but eyes hollow. Moonlight through barred window.",
+  
+  // === NEW: SENSORY DETAILS ===
+  SweatGlisten: "Micro-detail: Individual beads of sweat on collarbone catching rim-light, rolling down into shadows.",
+  FabricCling: "Wet white shirt clinging to feminine torso, fabric transparency revealing lace beneath, individual shirt buttons straining.",
+  BreathVisible: "Cold dungeon air: Subject's breath visible as vapor in foreground, woman's warm breath fogging the space between their faces.",
+  
+  // === NEW: EMOTIONAL BEATS ===
+  DefiantSubmission: "Subject's face: Jaw clenched, eyes refusing to look away from authority figure, but body language betraying trembling hands and slightly bent knees.",
+  PredatoryAmusement: "Authority figure's expression: One eyebrow raised, corner of mouth lifted in Manara half-smile, eyes tracking Subject's every micro-flinch with scientific fascination.",
+  FragileHope: "Ally character: Peeking from doorway, hand covering mouth, eyes wide with mix of horror and determination to intervene but frozen by fear."
 };
 
-export const VisualBible = {
+const VisualBible = {
 
   // 1. Single Panel Generator (Used by App.tsx)
   // Adopts the JSON-Wrapped Strategy for "SOTA" adherence.
@@ -137,7 +155,7 @@ export const VisualBible = {
     if (['InterrogationParlor'].includes(beat.location)) lighting = LIGHTING_PRESETS['RestrainedAmber'];
 
     // Construct the JSON Object for the Image Model
-    const promptPayload = {
+    const promptPayload: any = { // Use 'any' to dynamically add subject_context and ally_context
       header: ZERO_DRIFT_HEADER,
       scene_context: {
         location: locDNA,
@@ -164,6 +182,13 @@ export const VisualBible = {
       
       negative_prompt: VISUAL_MANDATE.negative
     };
+
+    // Add character bios to prompt for better context if available
+    // The App.tsx was attempting to do this after stringifying, which is incorrect.
+    // It should be part of the initial JSON construction.
+    // (Assuming hero.bio and friend.bio are passed in the 'beat' or derived from context)
+    // For now, these fields are handled directly in App.tsx `generateImageRaw`
+    // by passing the `Persona` objects, which will then use the `bio` if present.
 
     return JSON.stringify(promptPayload, null, 2);
   },
@@ -194,6 +219,222 @@ export const VisualBible = {
     }, null, 2);
   },
 
+  // NEW: 2-Panel Horizontal Spread Generator
+  get2PanelSpreadPrompt: (
+    leftPanel: { director: DirectorOutput, beat: Beat, position: 'left', hero: Persona | null, friend: Persona | null },
+    rightPanel: { director: DirectorOutput, beat: Beat, position: 'right', hero: Persona | null, friend: Persona | null }
+  ): string => {
+      const getPanelDetails = (panel: { director: DirectorOutput, beat: Beat, hero: Persona | null, friend: Persona | null }) => {
+          const focusDNA = CHARACTER_DNA[panel.beat.focus_char] || CHARACTER_DNA['Subject'];
+          const locDNA = LOCATION_DNA[panel.beat.location] || LOCATION_DNA['Refectory'];
+          let lighting: string = LIGHTING_PRESETS['Moody'];
+          if (['Calibration Chamber', 'Research Wing', 'Isolation Ward'].includes(panel.beat.location)) lighting = LIGHTING_PRESETS['Harsh'];
+          if (['Confessional', 'Bathhouse', 'Infirmary'].includes(panel.beat.location)) lighting = LIGHTING_PRESETS['Intimate'];
+          if (['InterrogationParlor'].includes(panel.beat.location)) lighting = LIGHTING_PRESETS['RestrainedAmber'];
+
+          let panelPrompt: any = { // Use any to allow dynamic addition of bio contexts
+              scene_context: {
+                  location: locDNA,
+                  lighting_setup: lighting,
+                  camera: panel.director.visuals.camera || "Cinematic 50mm, shallow depth of field",
+                  atmosphere: panel.beat.mood || VISUAL_MANDATE.mood
+              },
+              characters: {
+                  foreground_focus: {
+                      identity: focusDNA,
+                      pose: panel.director.visuals.pose,
+                      expression: "Complex mix of cruelty and amusement (if predator) or fear and desire (if prey)"
+                  },
+                  midground_subject: panel.hero ? CHARACTER_DNA['Subject'] + " (Restrained, struggling, sweating)" : undefined,
+                  background_ally: panel.friend ? CHARACTER_DNA['Ally'] + " (Watching in terror)" : undefined
+              },
+              visual_motifs: [
+                  "ClingingVelvet", 
+                  "RimLitCleavage", 
+                  panel.beat.focus_char === 'Subject' ? "BoundWrists" : "CruelHalfSmile",
+                  ...(panel.beat.motifs || [])
+              ].map(k => VISUAL_MOTIFS[k as keyof typeof VISUAL_MOTIFS] || k),
+          };
+          
+          // Inject character bios into prompt if available
+          if (panel.hero?.bio) panelPrompt.subject_context = panel.hero.bio;
+          if (panel.friend?.bio) panelPrompt.ally_context = panel.friend.bio;
+          
+          return panelPrompt;
+      };
+
+      return JSON.stringify({
+          header: ZERO_DRIFT_HEADER,
+          format: "2-panel horizontal comic spread, seamless gutter transition",
+          layout: {
+              left_panel: {
+                  position: "left half of 1920x1080 canvas",
+                  ...getPanelDetails(leftPanel)
+              },
+              right_panel: {
+                  position: "right half of 1920x1080 canvas",
+                  ...getPanelDetails(rightPanel)
+              }
+          },
+          consistency: "CRITICAL: Maintain 100% same style, lighting, color grading, and character identities across both panels. Ensure smooth narrative flow between the two halves.",
+          gutter: "4px solid black separator between panels",
+          negative_prompt: VISUAL_MANDATE.negative
+      }, null, 2);
+  },
+
+  // NEW: Iterative Refinement System
+  refinePanel: async (existingImageBase64: string, editInstruction: string, ai: GoogleGenAI): Promise<string> => { // Pass AI instance
+      try {
+          const res = await ai.models.generateContent({
+              model: 'gemini-2.5-flash-image', // Assuming same image model for edits
+              contents: [
+                  { 
+                      text: "EXISTING_PANEL:",
+                      inlineData: { mimeType: 'image/jpeg', data: existingImageBase64.split(',')[1] }
+                  },
+                  {
+                      text: JSON.stringify({
+                          edit_mode: "targeted_modification",
+                          instruction: editInstruction,
+                          preserve: "All character faces, proportions, clothing details, and background elements not specified for modification.",
+                          modify_only: "As specified in instruction, seamlessly blend changes.",
+                          quality: "Seamless blend, no artifacts, maintain original style and details."
+                      })
+                  }
+              ],
+              config: {}
+          });
+          
+          const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+          return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : existingImageBase64;
+      } catch (e) {
+          console.error("Image refinement failed:", e);
+          return existingImageBase64; // Return original image on error
+      }
+  },
+
+  // NEW: Client-side Text Overlay Rendering utilities
+  addDialogueBubble: (baseImage: string, dialogue: string, position: 'top'|'bottom'|'center', archetype: Archetype): Promise<string> => {
+      return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.width;
+              canvas.height = img.height;
+              const ctx = canvas.getContext('2d')!;
+              
+              ctx.drawImage(img, 0, 0);
+              
+              // Determine font and color based on archetype (simplified, match Panel.tsx's logic)
+              const fontStyle = (archetype === 'Provost' || archetype === 'Loyalist') ? 'Cinzel' : 'Darker Grotesque';
+              const textColor = (archetype === 'Provost' || archetype === 'Loyalist') ? '#d4af37' : 'black';
+              const bubbleFill = (archetype === 'Provost' || archetype === 'Loyalist') ? '#1a0505' : 
+                                 (archetype === 'Inquisitor' || archetype === 'Custodian') ? 'white' : 
+                                 (archetype === 'Confessor' || archetype === 'Siren') ? '#fff0f5' : 
+                                 (archetype === 'Logician' || archetype === 'Pragmatist') ? '#f0fdf4' : 'white';
+              const bubbleStroke = (archetype === 'Provost' || archetype === 'Loyalist') ? '#d4af37' : 'black';
+              const bubbleLineWidth = (archetype === 'Provost' || archetype === 'Loyalist') ? 3 : 2;
+
+              ctx.font = `bold ${Math.min(30, img.width / 20)}px "${fontStyle}"`; // Dynamic font size
+              const textMetrics = ctx.measureText(dialogue);
+              
+              // Simple text wrapping for comics
+              const maxTextWidth = img.width * 0.7; // Max 70% of image width
+              const words = dialogue.split(' ');
+              let lines: string[] = [];
+              let currentLine = words[0];
+
+              for (let i = 1; i < words.length; i++) {
+                  const word = words[i];
+                  const width = ctx.measureText(currentLine + ' ' + word).width;
+                  if (width < maxTextWidth) {
+                      currentLine += ' ' + word;
+                  } else {
+                      lines.push(currentLine);
+                      currentLine = word;
+                  }
+              }
+              lines.push(currentLine);
+
+              const lineHeight = Math.min(35, img.width / 25);
+              const bubblePadding = Math.min(20, img.width / 40);
+              const bubbleWidth = Math.max(...lines.map(line => ctx.measureText(line).width)) + bubblePadding * 2;
+              const bubbleHeight = (lines.length * lineHeight) + bubblePadding * 2;
+
+              let bubbleX = img.width / 2 - bubbleWidth / 2;
+              let bubbleY;
+              switch(position) {
+                  case 'top': bubbleY = img.height * 0.15 - bubbleHeight / 2; break;
+                  case 'center': bubbleY = img.height / 2 - bubbleHeight / 2; break;
+                  case 'bottom': bubbleY = img.height * 0.75 - bubbleHeight / 2; break;
+              }
+
+              // Draw rounded rectangle bubble
+              VisualBible.roundRect(ctx, bubbleX, bubbleY, bubbleWidth, bubbleHeight, Math.min(20, img.width / 30));
+              ctx.fillStyle = bubbleFill;
+              ctx.fill();
+              ctx.strokeStyle = bubbleStroke;
+              ctx.lineWidth = bubbleLineWidth;
+              ctx.stroke();
+              
+              // Draw text
+              ctx.fillStyle = textColor;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'middle';
+              lines.forEach((line, index) => {
+                  ctx.fillText(line, bubbleX + bubbleWidth / 2, bubbleY + bubblePadding + (index * lineHeight) + (lineHeight / 2));
+              });
+              
+              resolve(canvas.toDataURL('image/jpeg', 0.95));
+          };
+          img.onerror = (e) => reject(`Failed to load image for bubble: ${e}`);
+          img.src = baseImage;
+      });
+  },
+
+  roundRect: (ctx: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) => {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+  },
+
+  // NEW: 3-Image Blending for Complex Scenes
+  getCompositeScenePrompt: (characterRef: string, environmentRef: string, lightingRef: string, director: DirectorOutput, beat: Beat): string => {
+      return JSON.stringify({
+          header: ZERO_DRIFT_HEADER,
+          composition_mode: "3_SOURCE_BLEND",
+          sources: {
+              character: {
+                  ref_base64: characterRef,
+                  instruction: "Extract ONLY the character's pose, anatomy, clothing, expression. Preserve 100% identity. Place in foreground.",
+                  layer: "foreground"
+              },
+              environment: {
+                  ref_base64: environmentRef,
+                  instruction: "Extract ONLY the background architecture, props, textures. Remove any people. Place in background.",
+                  layer: "background"
+              },
+              lighting: {
+                  ref_base64: lightingRef,
+                  instruction: "Apply ONLY the lighting scheme: direction, color temperature, shadow density, highlights, atmospheric effects. Integrate globally.",
+                  layer: "global_effect"
+              }
+          },
+          blend_directive: "Seamlessly composite the 3 layers with perfect occlusion and matching perspective. Maintain 'Renaissance Brutalism' aesthetic.",
+          director_overrides: director.visuals,
+          narrative_context: beat.scene,
+          quality: ["photorealistic", "no seams", "unified color grading", "8k", "masterpiece", "sharp focus"]
+      });
+  },
+
   // 3. Covers (Legacy/Simplified wrappers)
   getCoverPrompt: (): string => JSON.stringify({
     header: ZERO_DRIFT_HEADER,
@@ -209,5 +450,12 @@ export const VisualBible = {
     visual: "Close up of a pair of patent leather high heels stepping on a torn white shirt. Background: Pitted concrete floor. Dust motes dancing in a single shaft of yellow light.",
     lighting: LIGHTING_PRESETS['Moody'],
     negative: VISUAL_MANDATE.negative
-  })
+  }),
+
+  // Export for App.tsx access
+  ZERO_DRIFT_HEADER,
+  VISUAL_MANDATE
 };
+
+// --- FIX: Ensure VisualBible is correctly exported ---
+export { VisualBible };

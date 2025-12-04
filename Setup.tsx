@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -48,12 +47,12 @@ const SetupComponent: React.FC<SetupProps> = React.memo((props) => {
         setSubjectName("Nico");
         setCoreFear("Failure");
 
-        // Preset Ally (Female, Fragile Scholar)
+        // Preset Ally (Female, Fragile Scholar, based on provided image)
         props.setFriend({
             base64: undefined,
             name: "Elara",
             archetype: "Ally",
-            bio: "A fragile female scholar who knows too much about the Forge's history. Delicate features, messy dark hair, anxious but fiercely intelligent. Wearing an oversized, ink-stained shirt.",
+            bio: "A fragile female scholar with long, light brown curly hair, fair skin, and striking green eyes, wearing a simple black ribbed crop top and a plaid mini-skirt. She carries an air of anxious intelligence, hinting at secrets she knows about the Forge.",
             desc: "The Ally"
         });
     };

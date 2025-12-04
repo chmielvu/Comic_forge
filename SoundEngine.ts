@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -7,8 +6,9 @@
 export const SoundManager = {
     ctx: null as AudioContext | null,
     muted: false,
-    oscillators: [] as AudioNode[], // Store any playing nodes to stop them later
+    oscillators: [] as AudioNode[], // Store any playing ambience nodes to stop them later
     gainNode: null as GainNode | null,
+    activeVoices: new Map<string, AudioBufferSourceNode>(), // Track playing voices by ID
 
     init: () => {
         if (!SoundManager.ctx) {
@@ -32,8 +32,17 @@ export const SoundManager = {
 
     /**
      * Decodes and plays a Base64 audio string (Gemini TTS output).
+     * @param base64Data The Base64 encoded audio data.
+     * @param id An optional unique ID to manage concurrent voice playback (e.g., page ID).
      */
-    playVoice: async (base64Data: string) => {
+    playVoice: async (base64Data: string, id?: string) => {
+        // Stop previous voice with the same ID if still playing (prevent overlap)
+        if (id && SoundManager.activeVoices.has(id)) {
+            const prev = SoundManager.activeVoices.get(id);
+            prev?.stop();
+            SoundManager.activeVoices.delete(id);
+        }
+
         if (SoundManager.muted) return;
         SoundManager.init();
         const ctx = SoundManager.ctx;
@@ -51,15 +60,31 @@ export const SoundManager = {
             }
 
             // Decode and play
-            // Note: In a real prod app, you might want to cache decoded buffers
             const buffer = await ctx.decodeAudioData(bytes.buffer);
             const source = ctx.createBufferSource();
             source.buffer = buffer;
             source.connect(ctx.destination);
+            
+            // Clean up when finished
+            source.onended = () => {
+                if (id) SoundManager.activeVoices.delete(id);
+            };
+            
             source.start(0);
+            
+            if (id) SoundManager.activeVoices.set(id, source);
         } catch (e) {
             console.error("Failed to play voice:", e);
         }
+    },
+
+    /**
+     * Stops all currently playing voice audio.
+     */
+    stopAllVoices: () => {
+        SoundManager.activeVoices.forEach(source => source.stop());
+        SoundManager.activeVoices.clear();
+        console.log("All active voices stopped and cleared.");
     },
 
     // The "Halls of the Forge" - Subdued, Creaking, Atmospheric

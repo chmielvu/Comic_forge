@@ -1,4 +1,3 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -25,7 +24,7 @@ export interface GraphNode {
   id: string; // e.g., "Subject", "Ally", "Provost"
   type: 'character' | 'location' | 'concept';
   label: string;
-  properties: Record<string, any>; // e.g. { mood: "defiant", injury: "ribs" }
+  properties: Record<string, any>; // e.g. { mood: "defiant", injury: "none" }
 }
 
 export interface GraphEdge {
@@ -38,6 +37,13 @@ export interface GraphEdge {
 export interface KnowledgeGraph {
   nodes: GraphNode[];
   edges: GraphEdge[];
+}
+
+export interface GraphAnalysis {
+  mostInfluentialCharacter: string; // PageRank winner
+  keyRelationships: Array<{ from: string, to: string, strength: number }>;
+  isolatedNodes: string[];
+  communityStructure: Record<string, string[]>; // Group ID -> Node IDs
 }
 
 // --- Agentic Pipeline Types ---
