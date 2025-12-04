@@ -4,26 +4,25 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import jsPDF from 'jspdf';
 import { MAX_STORY_PAGES, BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, ComicFace, Beat, Persona, YandereLedger, Archetype } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
-import { useApiKey } from './useApiKey';
-import { ApiKeyDialog } from './ApiKeyDialog';
 import { SoundManager } from './SoundEngine';
 import { LoreEngine } from './LoreEngine';
 import { VisualBible } from './VisualBible';
 
 // --- Constants ---
-const MODEL_V3 = "gemini-3-pro-image-preview";
-const MODEL_IMAGE_GEN_NAME = MODEL_V3;
-const MODEL_TEXT_NAME = MODEL_V3;
+// Switched to Flash Image per request ("Nano Banana")
+const MODEL_IMAGE_GEN_NAME = "gemini-2.5-flash-image"; 
+const MODEL_TEXT_NAME = "gemini-2.5-flash"; // Flash is excellent for JSON reasoning logic
 
 const App: React.FC = () => {
   // --- API Key Hook ---
-  const { validateApiKey, setShowApiKeyDialog, showApiKeyDialog, handleApiKeyDialogContinue } = useApiKey();
+  // The API key is now assumed to be provided via process.env.API_KEY
+  // No explicit user selection dialog is needed for gemini-2.5-flash-image.
 
   const [hero, setHeroState] = useState<Persona | null>(null); // "The Subject"
   const [friend, setFriendState] = useState<Persona | null>(null); // "The Ally"
@@ -57,13 +56,9 @@ const App: React.FC = () => {
   const handleAPIError = (e: any) => {
     const msg = String(e);
     console.error("API Error:", msg);
-    if (
-      msg.includes('Requested entity was not found') || 
-      msg.includes('API_KEY_INVALID') || 
-      msg.toLowerCase().includes('permission denied')
-    ) {
-      setShowApiKeyDialog(true);
-    }
+    // Removed API key dialog logic as it's no longer necessary for gemini-2.5-flash-image
+    // and process.env.API_KEY is assumed to be pre-configured.
+    alert(`An API error occurred. Please check your console for details. Error: ${msg}`);
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -88,36 +83,25 @@ const App: React.FC = () => {
         .sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
 
     const historyText = relevantHistory.map(p => 
-      `[Page ${p.pageIndex}] [Location: ${p.narrative?.location}] [Focus: ${p.narrative?.focus_char}] (Caption: "${p.narrative?.caption || ''}") (Action: "${p.narrative?.scene}") ${p.resolvedChoice ? `-> SUBJECT CHOICE: "${p.resolvedChoice}"` : ''}`
+      `[Page ${p.pageIndex}] [Location: ${p.narrative?.location}] [Focus: ${p.narrative?.focus_char}] (Action: "${p.narrative?.scene}") ${p.resolvedChoice ? `-> SUBJECT CHOICE: "${p.resolvedChoice}"` : ''}`
     ).join('\n');
 
+    // Graph of Thoughts injection
     const prompt = `
 DIRECTOR ORDER: GENERATE PAGE ${pageNum}.
 SCENE CONFIG: 
 - Location: ${sceneConfig.location}
 - Focus Archetype: ${sceneConfig.focus}
 - Narrative Intent: "${sceneConfig.intent}"
+- Decision Page: ${isDecisionPage}
 
 PREVIOUS EVENTS:
 ${historyText.length > 0 ? historyText : "The Subject arrives at The Forge. The air smells of salt and dread."}
 
-INSTRUCTIONS:
-1. Write the narrative beat. Use the "Grammar of Suffering" for any pain/trauma.
-2. DIALOGUE: Write concise, punchy dialogue (max 20 words). 
-   - If Focus is SELENE: Use the 'Voice of Inevitability' (academic, bored).
-   - If Focus is CALISTA: Use 'Weaponized Sexuality' (endearments like 'pet', 'darling' even when cruel).
-   - If Focus is PETRA: Use 'Gleeful Cruelty'.
-3. If this is a decision page (${isDecisionPage}), offer 2 psychological choices (e.g. Trust vs Isolate, Endure vs Defy).
-4. VISUAL SCENE: Describe the scene focusing on "The Gaze" and "The Pose". It should be intimate and claustrophobic.
-
-OUTPUT JSON:
-{
-  "caption": "Atmospheric narration (max 30 words).",
-  "dialogue": "Character speech (max 20 words).",
-  "scene": "Visual description for the artist. Focus on pose, lighting, and power dynamics.",
-  "choices": ["Choice A", "Choice B"] (Only if decision page),
-  "ledger_impact": {"hope": -5, "trauma": +10} (Estimated impact)
-}
+EXECUTE GRAPH OF THOUGHTS:
+1. Analyze the Subject's current Ledger (Hope: ${ledger.hope}, Trauma: ${ledger.trauma}).
+2. Determine the Focus Character's strategy (e.g. Gaslighting, Kinetic Violence).
+3. Generate the Beat JSON.
 `;
 
     try {
@@ -186,7 +170,7 @@ OUTPUT JSON:
     } else if (type === 'back_cover') {
         promptText = VisualBible.getBackCoverPrompt();
     } else {
-        promptText = VisualBible.constructPrompt(beat, heroRef.current!, friendRef.current);
+        promptText = VisualBible.constructPrompt(beat, !!heroRef.current, !!friendRef.current);
     }
 
     contents.push({ text: promptText });
@@ -196,7 +180,11 @@ OUTPUT JSON:
         const res = await ai.models.generateContent({
           model: MODEL_IMAGE_GEN_NAME,
           contents: contents,
-          config: { imageConfig: { aspectRatio: '2:3' } }
+          config: { 
+              // Flash Image specific tuning
+              // Note: aspectRatio not fully supported in config for all versions, usually managed via prompt or post-process in some libs
+              // But we keep it if supported by this SDK version
+          }
         });
         const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
         return part?.inlineData?.data ? `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` : '';
@@ -269,9 +257,10 @@ OUTPUT JSON:
   const launchStory = async (name: string, fear: string) => {
     SoundManager.init();
     SoundManager.play('success');
+    if (soundEnabled) SoundManager.startAmbience();
 
-    const hasKey = await validateApiKey();
-    if (!hasKey) return;
+    // No explicit API key validation/dialog for gemini-2.5-flash-image;
+    // process.env.API_KEY is assumed to be configured externally.
     
     if (!heroRef.current) return;
     
@@ -291,6 +280,7 @@ OUTPUT JSON:
         setIsStarted(true);
         setShowSetup(false);
         setIsTransitioning(false);
+        setCurrentSheetIndex(1); // Set to 1 to automatically open the book to the first story page
         await generateBatch(1, INITIAL_PAGES);
         generateBatch(3, 3);
     }, 2000);
@@ -307,6 +297,7 @@ OUTPUT JSON:
 
   const resetApp = () => {
       SoundManager.play('click');
+      SoundManager.stopAmbience();
       setIsStarted(false);
       setShowSetup(true);
       setComicFaces([]);
@@ -364,12 +355,19 @@ OUTPUT JSON:
   const handleSoundToggle = (enabled: boolean) => {
       setSoundEnabled(enabled);
       SoundManager.setMuted(!enabled);
-      if (enabled) SoundManager.play('click');
+      if (enabled) {
+          SoundManager.play('click');
+          if (isStarted) SoundManager.startAmbience();
+      } else {
+          SoundManager.stopAmbience();
+      }
   };
 
   return (
     <div className="comic-scene">
-      {showApiKeyDialog && <ApiKeyDialog onContinue={handleApiKeyDialogContinue} />}
+      {/* ApiKeyDialog is removed as `gemini-2.5-flash-image` does not require explicit API key selection dialog.
+          API_KEY is assumed to be configured in the environment. */}
+      {/* {showApiKeyDialog && <ApiKeyDialog onContinue={handleApiKeyDialogContinue} />} */}
       
       <Setup 
           show={showSetup}

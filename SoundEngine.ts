@@ -7,6 +7,9 @@
 export const SoundManager = {
     ctx: null as AudioContext | null,
     muted: false,
+    droneOsc: null as OscillatorNode | null,
+    droneGain: null as GainNode | null,
+    lfo: null as OscillatorNode | null,
 
     init: () => {
         if (!SoundManager.ctx) {
@@ -19,8 +22,70 @@ export const SoundManager = {
 
     setMuted: (mute: boolean) => {
         SoundManager.muted = mute;
-        if (!mute && SoundManager.ctx?.state === 'suspended') {
-            SoundManager.ctx.resume();
+        if (SoundManager.ctx) {
+            if (mute) {
+                SoundManager.ctx.suspend();
+            } else {
+                SoundManager.ctx.resume();
+            }
+        }
+    },
+
+    // The "Symphony of Dread" - An infrasound hum
+    startAmbience: () => {
+        SoundManager.init();
+        if (!SoundManager.ctx || SoundManager.droneOsc) return;
+
+        const t = SoundManager.ctx.currentTime;
+        const mainGain = SoundManager.ctx.createGain();
+        mainGain.connect(SoundManager.ctx.destination);
+        
+        // 1. Deep Sub-Bass Drone (The Geothermal Vent)
+        const drone = SoundManager.ctx.createOscillator();
+        drone.type = 'sawtooth';
+        drone.frequency.setValueAtTime(45, t); 
+        
+        const droneFilter = SoundManager.ctx.createBiquadFilter();
+        droneFilter.type = 'lowpass';
+        droneFilter.frequency.setValueAtTime(100, t);
+        droneFilter.Q.value = 1;
+
+        // 2. LFO to modulate the drone (breathing effect)
+        const lfo = SoundManager.ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.value = 0.1; // Very slow cycle (10 seconds)
+        
+        const lfoGain = SoundManager.ctx.createGain();
+        lfoGain.gain.value = 20; // Modulate frequency by +/- 20Hz
+        
+        lfo.connect(lfoGain);
+        lfoGain.connect(droneFilter.frequency);
+
+        // Volume Envelope
+        mainGain.gain.setValueAtTime(0, t);
+        mainGain.gain.linearRampToValueAtTime(0.04, t + 3); // Slow fade in
+
+        drone.connect(droneFilter);
+        droneFilter.connect(mainGain);
+        
+        drone.start();
+        lfo.start();
+
+        SoundManager.droneOsc = drone;
+        SoundManager.lfo = lfo;
+        SoundManager.droneGain = mainGain;
+    },
+
+    stopAmbience: () => {
+        if (SoundManager.droneOsc && SoundManager.droneGain && SoundManager.ctx) {
+            const t = SoundManager.ctx.currentTime;
+            SoundManager.droneGain.gain.exponentialRampToValueAtTime(0.001, t + 2);
+            SoundManager.droneOsc.stop(t + 2);
+            if (SoundManager.lfo) SoundManager.lfo.stop(t + 2);
+            
+            SoundManager.droneOsc = null;
+            SoundManager.lfo = null;
+            SoundManager.droneGain = null;
         }
     },
 
@@ -62,7 +127,7 @@ export const SoundManager = {
                 break;
 
             case 'flip':
-                // Synthesized paper noise (White noise buffer)
+                // Synthesized paper noise
                 const bufferSize = ctx.sampleRate * 0.3; // 300ms
                 const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
                 const data = buffer.getChannelData(0);
@@ -87,10 +152,10 @@ export const SoundManager = {
                 break;
 
             case 'pow':
-                // Classic 8-bit slide
+                // Impact hit
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(600, t);
-                osc.frequency.exponentialRampToValueAtTime(100, t + 0.3);
+                osc.frequency.setValueAtTime(100, t);
+                osc.frequency.exponentialRampToValueAtTime(20, t + 0.3);
                 gain.gain.setValueAtTime(0.1, t);
                 gain.gain.linearRampToValueAtTime(0, t + 0.3);
                 osc.start(t);
@@ -98,23 +163,23 @@ export const SoundManager = {
                 break;
 
             case 'success':
-                // Ascending Arpeggio
-                osc.type = 'square';
+                // Ascending Arpeggio (Darker)
+                osc.type = 'triangle';
                 gain.gain.value = 0.05;
                 
-                [440, 554, 659, 880].forEach((freq, i) => {
+                [220, 277, 329, 440].forEach((freq, i) => { // Minor chord
                     const oscN = ctx.createOscillator();
                     const gainN = ctx.createGain();
-                    oscN.type = 'square';
+                    oscN.type = 'triangle';
                     oscN.frequency.value = freq;
                     oscN.connect(gainN);
                     gainN.connect(ctx.destination);
                     
-                    const start = t + (i * 0.08);
+                    const start = t + (i * 0.1);
                     gainN.gain.setValueAtTime(0.05, start);
-                    gainN.gain.exponentialRampToValueAtTime(0.001, start + 0.2);
+                    gainN.gain.exponentialRampToValueAtTime(0.001, start + 0.4);
                     oscN.start(start);
-                    oscN.stop(start + 0.2);
+                    oscN.stop(start + 0.4);
                 });
                 break;
         }

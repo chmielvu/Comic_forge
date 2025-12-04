@@ -56,6 +56,7 @@ export interface ComicFace {
 }
 
 export interface Beat {
+  thought_chain?: string; // The AI's reasoning step (Graph of Thoughts / CoT)
   caption?: string;
   dialogue?: string;
   scene: string;

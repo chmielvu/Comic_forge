@@ -1,111 +1,169 @@
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 
-import { Beat, Persona, Archetype } from './types';
+import { Beat, Archetype } from './types';
 
-// --- VISUAL BIBLE v5.1: RENAISSANCE BRUTALISM & VAMPIRE NOIR ---
-
+/* ===================================================================
+   VISUAL MANDATE v8 – Rebuilt for maximum fidelity and atmosphere
+   =================================================================== */
 const VISUAL_MANDATE = {
-  style: "style: grounded dark erotic academia + baroque brutalism + vampire noir + intimate psychological horror + rembrandt caravaggio lighting. masterpiece, oil painting texture.",
-  technical: "camera: intimate 50mm or 85mm close-up, shallow depth of field. lighting: cinematic rembrandt lighting, volumetric gaslight with cool blue rim-light to separate subject from background, deep shadows but detailed midtones, atmospheric fog.",
-  mood: "mood: predatory intimacy, clinical amusement, suffocating dread, weaponized sexuality.",
-  negative: "bright colors, cheerful, modern architecture, soft focus, natural daylight, explicit nudity, graphic violence, anime, cartoon, 3d render, low res, underexposed, crushed blacks, illegible, too dark, flat lighting, muddy textures."
-};
+  // Hyper-specific, lens-first, Caravaggio/Rutkowski hybrid.
+  style: "masterpiece, best quality, ultra-detailed oil painting texture in the style of Caravaggio and Greg Rutkowski, baroque brutalist vampire noir, dark erotic academia, cinematic color grading, film grain, 50mm prime lens f/1.4, shallow depth of field, hyper-real tactile fabrics with visible thread count and strain lines",
 
+  // Lighting rewritten with obsession for rim-light + volumetrics
+  lighting: "single dramatic key light (flickering amber gaslamp OR cold surgical overhead), extreme chiaroscuro, hard rim lighting catching sweat beads and lace edges, dense volumetric fog in background, god rays, caustics on wet skin, deep inky shadows pooling in cleavage, throat hollows and skirt slits",
+
+  mood: "predatory intimacy, suffocating dread, weaponized sexuality, clinical amusement, voyeuristic tension, power imbalance frozen mid-breath",
+
+  // Semantic negatives baked as positive framing
+  palette_and_atmosphere: "exclusively desaturated palette: Charcoal #2B2B2B, Stone Gray #6E6E6E, Deep Umber, Blood Crimson #7C0A0A, Tarnished Gold #A77A3A. No bright colors, no cheerful expressions, no natural daylight, no modern architecture, no soft focus, no anime influence, no 3d render artifacts, no flat lighting, no fantasy armor or capes",
+
+  // Explicit directives for identity lock
+  directives: "Female authority figures always white shirts half-unbuttoned revealing/cleavage, high slits, sheer stockings, velvet robes. Male subjects: disheveled, sweating, open shirts, bruises blooming across ribs, look of exhausted submission. Predatory expressions on faculty."
+} as const;
+
+/* ===================================================================
+   LIGHTING PRESETS
+   =================================================================== */
 const LIGHTING_PRESETS = {
-    'Harsh': "Lighting: Single dominant harsh source (top-down clinical or spotlight) with strong cool rim-light.",
-    'Intimate': "Lighting: Warm gaslamp amber glow battling cool blue moonlight, rim lighting on hair and shoulders, soft fill.",
-    'Moody': "Lighting: Cinematic rim lighting, silhouette emphasis against volumetric fog, deep chiaroscuro but visible faces."
+  Harsh: "85mm lens, harsh top-down surgical lamp 5600K, hard cool rim light from behind, sweat droplets sparkle like diamonds, eyes catch tiny catchlight reflections, deep black shadows swallow background",
+  Intimate: "50mm lens f/1.4, warm 2800K gaslamp battling cool blue moonlight through cracked window, golden rim light tracing lace edges and throat, velvet fog, skin has oily specular sheen",
+  Moody: "35mm lens, almost pure rim lighting only, subject half-silhouetted against thick volumetric fog, single blood-crimson practical light catches eyes and parted lips"
 };
 
-export const PALETTE_TOKENS = "Palette: Charcoal #2B2B2B, Stone Gray #6E6E6E, Deep Umber, accents of Blood Crimson #7C0A0A and Tarnished Gold #A77A3A.";
-
-// --- CHARACTER VISUAL DNA (Archetype Mapping) ---
+/* ===================================================================
+   CHARACTER DNA v8
+   =================================================================== */
 const CHARACTER_DNA: Record<Archetype, string> = {
-    // Faculty
-    'Provost': "Character: Magistra Selene (The Zealot/Queen). Physique: Statuesque, towering, hourglass. Face: Severe beauty, sharp jaw, cold gray eyes, tight complex braids. Attire: Crimson velvet robes with plunging neckline, ornate silver lion brooch. Vibe: Bored god complex, regal dominance.",
-    'Inquisitor': "Character: Petra (The Sadist). Physique: Athletic, wiry, coiled tension. Face: Manic grin, piercing green eyes, dilated pupils, wild white hair. Attire: Tight green tank top, leather harness, fur-collared coat. Vibe: Kinetic energy, exhilarated cruelty.",
-    'Confessor': "Character: Calista (The Siren/Psychologist). Physique: Voluptuous, soft curves, heavy-lidded. Face: Sultry brown eyes, wet lips, faux-empathetic smile. Attire: Off-shoulder sapphire blouse, corset, translucent fabrics. Vibe: Languid, wet, weaponized softness.",
-    'Logician': "Character: Lysandra (The Perfectionist). Physique: Thin, precise, stiff. Face: Pinch, focused, icy blue eyes, ash-blonde braid. Attire: Pristine gray tunic, high collar, brass instruments. Vibe: Clinical, detached, measuring tape.",
-    'Custodian': "Character: Anya (The Nurse). Physique: Soft, fuller curves, maternal. Face: Kind open face, flushed cheeks, anxious. Attire: White medical jacket over unbuttoned blouse, satchel. Vibe: Warm, clinical, false-comfort.",
-    'Veteran': "Character: The Veteran. Physique: Craggy, scarred, imposing. Attire: Weathered leather armor. Vibe: Bitter cynicism, brute force.",
-    
-    // Prefects
-    'Loyalist': "Character: Loyalist Prefect. Physique: Rigid posture. Attire: Dark green blazer, pleated skirt, green ascot. Vibe: Stern conviction, brittle authority.",
-    'Pragmatist': "Character: Pragmatist Prefect. Physique: Hands-on, sturdy. Attire: Utilitarian tunic, tool belt. Vibe: Calculating.",
-    'Siren': "Character: Siren Prefect. Physique: Slender, sinuous. Attire: Theatrical blouse, lace cuffs. Vibe: Predatory warmth.",
-    'Dissident': "Character: Dissident Prefect. Physique: Tense, agile. Attire: Worn clothes, messy braid. Vibe: Guarded, intense.",
+  // Faculty
+  'Provost': "Magistra Selene, 48-year-old severe aristocratic beauty, sharp cheekbones, ice-gray eyes, crimson lips. Wearing plunging crimson velvet robe with gold filigree, robe parts to navel revealing deep cleavage and black lace corset, hip-high side slits expose full thigh and black garter straps. One hand holding antique silver goblet, wine reflecting candlelight.",
+  
+  'Inquisitor': "Petra, 35, feral platinum-white hair in loose waves, amber predator eyes. Black leather corset cinched brutally tight over soaked half-unbuttoned white shirt, shirt fabric translucent with sweat, nipples faintly visible beneath. Leather trousers with deliberate thigh slashes, skin glistening.",
 
-    // Subjects (The Victims)
-    'Subject': "Character: The Subject (Male). Physique: Gaunt, exhausted, trembling. Face: Sweat-slicked, pale, wide eyes. Attire: Simple grey tunic, torn, exposed collarbone. Vibe: The Martyr, suffering, beautiful agony.",
-    'Ally': "Character: The Ally (Male). Physique: Frail, breaking. Attire: Ragged tunic. Vibe: Desperate loyalty, hollow fear.",
-    'Guardian': "Character: The Guardian (Male). Physique: Muscular but restrained. Attire: Reinforced tunic. Vibe: Protective, stoic.",
-    'Archivist': "Character: The Archivist (Male). Physique: Hunched, hiding. Attire: Hooded cardigan. Vibe: Watchful, intelligent.",
-    'Ghost': "Character: The Ghost (Male). Physique: Hollow, fading. Vibe: Dissociative, haunted.",
-    'Jester': "Character: The Jester (Male). Physique: Twitchy, restless. Attire: Patchwork. Vibe: Anxious mockery.",
-    'Penitent': "Character: The Penitent (Male). Physique: Bowed, kneeling. Vibe: Earnest contrition, zealous."
+  'Confessor': "Calista, 29, soft voluptuous hourglass, honey-blonde hair. Sheer white blouse completely unbuttoned but knotted under breasts, black lace bra fully exposed, short pleated plaid skirt slit to hip, visible garter clips and stocking tops. Face: sultry, dark, almond-shaped eyes with feigned empathy and analytical glint. Lips: full, knowing half-smile.",
+
+  'Logician': "Doctor Lysandra, early 30s, quiet intense intelligence. Soft features, large dark inquisitive eyes (warm but analytical), chestnut-brown wavy hair often in messy bun, light freckles. Scholar's physique, deft steady hands. Attire: well-fitted cream/beige button-down blouse, high-waisted woolen trousers, wide leather belt. Private: loose antique yellow chemise revealing soft curves of shoulders/bust.",
+
+  'Custodian': "Kael, broad and imposing warden, middle-aged. Scarred, stern features, figure of authority. Attire: creaking leather armor over bulk, practical and menacing warden's uniform of control.",
+  
+  'Veteran': "Jaded female Warden, late 40s. Weathered, tired face, pragmatic gaze. Simple dark uniform, heavy utility belt, worn leather gloves. Body: powerful, muscular build, signs of past combat.",
+
+  // Prefects
+  'Loyalist': "Prefect Elara, late teens/early 20s, stern forced maturity. Youthful face, light freckles, severe judgmental mask, dark intelligent eyes, dark hair in severe bun. Athletic ectomorph, lean, sharp, angular physique. Attire: tailored dark green blazer, crisp white shirt, dark tie/ascot (formal). Or white collared shirt, dark pleated skirt, thigh-high socks, dark cardigan/vest (duty).",
+  
+  'Pragmatist': "Female Prefect, mid-20s, efficient and calculating. Sharp, intelligent eyes, neatly tied dark hair. Practical dark uniform, minimal adornment. Body: lean, athletic build, focused posture.",
+
+  'Siren': "Female Prefect, mid-20s, alluring and manipulative. Long flowing hair (blonde or dark), seductive smile, captivating eyes. Attire: form-fitting black leather or dark velvet, high slits, subtle lace details. Body: lithe, graceful, designed to draw attention.",
+
+  'Dissident': "Prefect Rhea, young woman chameleon. Fiery wavy red hair (often tucked away), sharp intelligent face, piercing green eyes. Lean agile athletic build. Attire: dark practical trench coat, white shirt, dark green/brown trousers (operative). Or open black blazer, dagger tattoo on throat, cigarette (punk mask). Private: simple dark top, choker, pensive haunted expression.",
+
+  // Subjects
+  'Subject': "Male Subject, 21, lean swimmer’s build, dark hair plastered with sweat, green eyes wide with fear and exhaustion. Torn white shirt hanging open to waist, fabric stuck to bruised chest and abdomen, trousers riding low on hips revealing V-line and trail of dark hair, wrists bound behind back with coarse rope (rope burn detail).",
+  
+  'Ally': "Male Ally, 20s, slender build, soft brown hair falling over worried eyes. Disheveled white shirt, torn and clinging to damp skin, simple dark trousers. Expression: pained, vulnerable, seeking solace.",    
+  
+  'Guardian': "Darius, male Subject, 20s, broad-framed, strong build. Features hardened by pain, sweat slicking his skin. Rugged trousers, practical and worn, often stripped bare in tests. Face: grim, resolute, but signs of deep exhaustion.",
+  
+  'Archivist': "Male Subject, late teens, frail, intellectual appearance. Thin frame, glasses askew, pale skin, ink-stained fingers. Attire: torn tunic, tattered linen. Expression: fearful, constantly observing, withdrawn.",
+  
+  'Ghost': "Male Subject, late teens, emaciated, psychologically shattered. Blank, distant eyes, pale, clammy skin. Attire: tattered, oversized garments that hang loosely. Body: almost skeletal, weak posture. Aura of profound despair.",
+  
+  'Jester': "Male Subject, early 20s, once defiant, now broken and manic. Wild eyes, disheveled hair, forced smile twitching. Attire: torn, mismatched clothing. Body: wiry, restless, constantly twitching. Attempts to joke or distract with erratic movements.",
+  
+  'Penitent': "Male Subject, mid-20s, guilt-ridden, seeking absolution. Gaunt face, downcast eyes, rough-hewn hair. Attire: simple, coarse tunic, bare feet, visible rope marks on wrists. Body: posture of humility and self-punishment."
 };
 
-// --- LOCATION MASTER PROMPTS ---
+/* ===================================================================
+   LOCATION DNA – now with physics-accurate descriptors
+   =================================================================== */
 const LOCATION_DNA: Record<string, string> = {
-    'Refectory': "Location: Cliffside Dining Hall. Wide shot. Long stone tables, eroded baroque statues fused into brutalist concrete. Flickering torchlight. Atmosphere: Social humiliation.",
-    'Calibration Chamber': "Location: The Calibration Chamber. Sterile brutalist rotunda. Pitted concrete walls, black basalt floor, central granite slab. Clinical overhead light pool. Atmosphere: Systemic Shock.",
-    'Confessional': "Location: The Confessional. Intimate study. Heavy velvet armchairs, thick rugs, blurred book stacks. Warm gaslamp amber light, dust motes. Atmosphere: Corrupted Intimacy.",
-    'Infirmary': "Location: The Infirmary. Shelves of glass bottles and salves. Amber lamplight pooling on a healing cot. Smell of herbs. Soft shadows. Atmosphere: False Sanctuary.",
-    'Dormitory': "Location: Subject Dormitory. Minimalist bunks, narrow windows with blue moonlight shafts. Rough concrete walls. Cold, prison-like.",
-    'Bathhouse': "Location: Steam Pools. Dusk. Carved stone pools, worn mosaic tiles. Warm amber lamps vs cool blue shadows. Steam haze. Atmosphere: Vulnerability and steam.",
-    'Research Wing': "Location: Research Lab. Glass observation rooms, brass analog dials. Pitted concrete. Desaturated stone-bronze palette. Cold science.",
-    'Grounds': "Location: Cliffside Grounds. Wind-lashed paths, gnarled trees, ritual circles. Overcast sky, distant brutalist silhouettes. Nature as antagonist.",
-    'Isolation Ward': "Location: Isolation Cell. Stark concrete, single overhead bulb. Heavy shadows. Claustrophobic.",
-    'Prefect Halls': "Location: Prefect Halls. Polished dark wood, velvet drapery, baroque flourishes. Reflective surfaces. Stately wealth."
+  'Calibration Chamber': "brutalist concrete rotunda, 40-foot ceiling, central black granite slab with worn leather restraints, single overhead surgical lamp on articulated arm, dust motes floating in beam, cold blue-white light, faint echo, cracked observation window high above",
+  'Confessional': "small oak-paneled study, heavy burgundy velvet armchairs, wall of ancient leather books, single amber gaslamp on brass chain, thick persian rug muffling footsteps, incense smoke curling",
+  'Refectory': "vast, echoing dining hall, long communal tables, high arched windows showing only gray sky, damp stone walls, metallic clanking of cutlery, sense of sterile deprivation.",
+  'Dormitory': "cramped, cell-like sleeping quarters, narrow cot, thin blanket, single flickering candle on a rough stone shelf, cold damp air, distant muffled sounds of anguish from outside.",
+  'Infirmary': "sterile white-tiled room, padded examination tables with leather restraints, strong antiseptic smell mixed with lavender, stark fluorescent lighting, gleaming surgical tools on steel trays.",
+  'Research Wing': "cold, angular laboratories, glass partitions, glowing monitors displaying biomechanical data, polished steel tables, clinical instruments, hushed whispers of researchers.",
+  'Bathhouse': "decaying Romanesque bathhouse, steaming dark water, crumbling marble columns, eerie blue flame hovering over water, echoes of past rituals, warm humid air, contrast of wet skin on cold stone.",
+  'Grounds': "windswept clifftops overlooking a churning gray sea, jagged basalt rocks, sparse gnarled trees, constant cold spray, sound of crashing waves, sense of isolation and exposure.",
+  'Prefect Halls': "long, dimly lit corridors of polished black basalt, monumental statues of severe female figures, echoing footsteps, deep shadows, scent of old parchment and ozone.",
+  'Isolation Ward': "lightless, soundproofed padded cell, claustrophobic, no windows, heavy steel door, silence broken only by one's own ragged breathing, sensory deprivation.",
 };
 
+/* ===================================================================
+   FINAL PROMPT CONSTRUCTOR – Nano Banana multi-turn optimized
+   =================================================================== */
 export const VisualBible = {
-    /**
-     * Constructs a modular prompt based on the "Compositional Trinity": Gaze, Pose, Environment.
-     */
-    constructPrompt: (beat: Beat, subject: Persona, ally: Persona | null): string => {
-        const charDNA = CHARACTER_DNA[beat.focus_char] || CHARACTER_DNA['Subject'];
-        const locDNA = LOCATION_DNA[beat.location] || LOCATION_DNA['Refectory'];
-        
-        // Determine Lighting based on Location/Mood
-        let lighting = LIGHTING_PRESETS['Moody'];
-        if (['Calibration Chamber', 'Research Wing', 'Isolation Ward'].includes(beat.location)) lighting = LIGHTING_PRESETS['Harsh'];
-        if (['Confessional', 'Bathhouse', 'Infirmary'].includes(beat.location)) lighting = LIGHTING_PRESETS['Intimate'];
+  // The systemPrompt method was removed as `NANO_BANANA_SYSTEM` was undefined and
+  // its purpose within VisualBible was unclear for image generation.
+  // The prompt construction for visuals is handled by constructPrompt.
 
-        // The "Compositional Trinity" Construction
-        let prompt = `${VISUAL_MANDATE.style} ${VISUAL_MANDATE.technical} ${VISUAL_MANDATE.mood} ${PALETTE_TOKENS}\n`;
-        prompt += `SETTING: ${locDNA}\n`;
-        prompt += `LIGHTING: ${lighting}\n`;
-        
-        prompt += `\n--- COMPOSITION (Psychological Horror) ---\n`;
-        prompt += `SCENE ACTION: ${beat.scene}. Use a cinematic angle to emphasize power dynamics (e.g. low angle looking up at authority, or high angle looking down at subject).\n`;
-        
-        // Subject Description
-        prompt += `SUBJECT (Foreground/Midground): ${CHARACTER_DNA['Subject']} (Reference 1). Pose: ${beat.focus_char === 'Subject' ? 'Central focus, struggling or enduring' : 'Submissive, kneeling, or reacting to authority'}. Skin texture: Sweat-slicked, high detail.\n`;
+  constructPrompt: (beat: Beat, heroPresent: boolean, friendPresent: boolean): string => {
+    const focusDNA = CHARACTER_DNA[beat.focus_char as Archetype]; // Explicit cast for safety
+    const location = LOCATION_DNA[beat.location] || LOCATION_DNA['Calibration Chamber'];
 
-        // Focus Character Description (The "Predatory" element)
-        if (beat.focus_char !== 'Subject') {
-             prompt += `FOCUS CHARACTER (Dominant): ${charDNA}. Focus on "The Gaze" (looking down, predatory, analytical) and "The Pose" (looming, invading space, chin tilt). Fabric strain on clothing. \n`;
-        }
-        
-        if (beat.focus_char === 'Ally' && ally) {
-             prompt += `ALLY: ${CHARACTER_DNA['Ally']} (Reference 2). Pose: Huddled or supporting.\n`;
-        }
+    let lighting = LIGHTING_PRESETS.Moody;
+    if (["Calibration Chamber", "Research Wing", "Isolation Ward"].includes(beat.location)) lighting = LIGHTING_PRESETS.Harsh;
+    if (["Confessional", "Bathhouse", "Infirmary"].includes(beat.location)) lighting = LIGHTING_PRESETS.Intimate;
 
-        prompt += `\nNEGATIVE PROMPT: ${VISUAL_MANDATE.negative}`;
+    // ─── NANO BANANA COMPOSITIONAL TRINITY (X-proven structure) ───
+    return `
+${VISUAL_MANDATE.style}
 
-        return prompt;
-    },
+ENVIRONMENT & LIGHTING:
+${location}
+${lighting}
+${VISUAL_MANDATE.palette_and_atmosphere}
 
-    getCoverPrompt: (): string => {
-        return `${VISUAL_MANDATE.style} TYPE: Graphic Novel Cover. VISUAL: A towering, statuesque female authority figure (The Provost) in crimson velvet robes stands on a stone dais, looking down with cold amusement. In the foreground, a kneeling male subject (seen from behind or profile), bare-shouldered, head bowed. SETTING: Eroded marble columns, heavy shadows. LIGHTING: Dramatic rim light, gaslamp glow. Title space at top. ${VISUAL_MANDATE.negative}`;
-    },
+MOOD & DIRECTIVES:
+${VISUAL_MANDATE.mood}
+${VISUAL_MANDATE.directives}
 
-    getBackCoverPrompt: (): string => {
-        return `${VISUAL_MANDATE.style} TYPE: Teaser Image. VISUAL: A close-up of an ornate iron shackle resting on a faded velvet cushion. Beside it, a glass vial of poppy liquid. Background: Pitted concrete wall with a faint chalk mark. LIGHTING: Single shaft of yellow light. TEXTURE: Dust, scratches, realism. ${VISUAL_MANDATE.negative}`;
-    }
+COMPOSITION (cinematic low-angle authority shot unless specified):
+Extreme close-up to medium shot, 50mm prime f/1.4, slight Dutch tilt, foreground bokeh.
+Action: ${beat.scene}
+
+FOREGROUND AUTHORITY (100% identity lock):
+${focusDNA}
+Sweat beads on collarbone, lace texture visible at 1:1, fabric strain lines over breasts/hips.
+
+${heroPresent ? `MIDGROUND SUBJECT (Reference 1 – preserve exact face/bone structure): ${CHARACTER_DNA.Subject}
+Use uploaded reference 1 for exact facial identity` : ""}
+
+${friendPresent ? `BACKGROUND ALLY (Reference 2 – preserve exact face/bone structure): ${CHARACTER_DNA.Ally}
+Use uploaded reference 2 for exact facial identity` : ""}
+
+CAMERA NEGATIVES (semantic style):
+ugly, deformed, extra limbs, blurry, low resolution, overexposed, underexposed, watermark, text, bright colors, cartoon, 3d render, flat lighting
+`.trim();
+  },
+
+  // One-shot cover prompts (already drift-proof)
+  getCoverPrompt: (): string => `
+${VISUAL_MANDATE.style}, graphic novel cover, ultra-detailed
+Provost Selene stands on eroded marble dais in crimson robe plunging to navel, cold amused smile, looking down at shirtless kneeling Subject (back to viewer, bruises across ribs), dramatic crimson rim light, gaslamp glow, blood title space at top, baroque columns crumbling, volumetric fog
+${VISUAL_MANDATE.palette_and_atmosphere}`,
+
+  // One-shot back cover prompt
+  getBackCoverPrompt: (): string => `
+${VISUAL_MANDATE.style}, graphic novel back cover, ultra-detailed
+A shattered, transparent hourglass against a backdrop of the Forge's weeping concrete walls, wisps of dark fog swirling around it. Inside the hourglass, faint silhouettes of tormented male figures. A single drop of blood drips onto a cracked page. Text: "The Lesson Never Ends."
+${VISUAL_MANDATE.palette_and_atmosphere}
+`,
+
+  // Reverse-engineering helper – feed any generated image back in and get JSON DNA
+  reverseEngineerPrompt: (): string => `
+Analyze this image and output a strict JSON object with these exact keys (no extra text):
+{
+  "subject_face_description": "",
+  "authority_description": "",
+  "lighting_setup": "",
+  "exact_palette_hex": [],
+  "fabric_details": "",
+  "mood_keywords": "",
+  "lens_and_angle": ""
+}
+Then I will use this JSON to make zero-drift edits.
+`.trim()
 };

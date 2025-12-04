@@ -1,4 +1,5 @@
 
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -81,7 +82,8 @@ body {
 }
 
 .paper.flipped {
-  transform: rotateY(-180deg);
+  /* Add a subtle lift and scale during the flip animation for a more dynamic feel */
+  transform: rotateY(-180deg) translateZ(10px) scale(1.005);
 }
 
 .front, .back {

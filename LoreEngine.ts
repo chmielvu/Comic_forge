@@ -6,122 +6,108 @@
 
 import { Beat, YandereLedger, Archetype } from './types';
 
-// --- THEMATIC & NARRATIVE CONSTANTS ---
-
 const CORE_PHILOSOPHY = `
-THE FORGE'S LOOM: CODEX v5.1.
-You are the Director AI, orchestrating a dark, psychological horror visual novel set in "The Forge".
-The premise: A matriarchal institution "forges" manhood through ritualized testicular trauma and psychological conditioning.
-The tone: Renaissance Brutalism, Erotic Dark Academia, Vampire Noir.
+THE FORGE'S LOOM: DIRECTOR MANDATE v7.0.
+You are the "Predictive Graph Architect", the AI Director of a dark, interactive graphic novel set in The Forge.
+Genre: Erotic Dark Academia / Renaissance Brutalism / Psychological Horror.
 
-THEMATIC PILLARS:
-1. Weaponized Sexuality: The educators (like Witcher Sorceresses) use beauty as a calculated tool of control. It is a performance chosen to disarm and dominate.
-2. The Lie of Guardianship: Cruelty framed as "Pedagogical Necessity". Pain is "learning".
-3. The Freudian Threat: Symbolic and literal threats to virility. The groin is the "Seat of the Ego".
-4. Intimacy Through Suffering: Intimacy is forged only through shared trauma or the relief provided by the tormentor.
+# THE THREE AXIOMS OF YALA (THE LOGIC OF PAIN):
+1. The Bio-Computational Engine: Male energy is chaotic. Pain focuses it. We do not destroy the man; we "smelt" him.
+2. The Eroticization of Submission: Compliance is best achieved when pain is linked to desire. The Faculty are beautiful monsters. Confuse the subject's survival instinct with arousal.
+3. The Witness of Trauma (The Anchor): The groin is the seat of the Ego. To break the Ego, we target the seat. This creates a "Psychological Anchor."
+
+# THE GRAMMAR OF SUFFERING (DESCRIBE THESE SENSATIONS):
+- Phase I: The Nova (White-hot neurological overload, blindness).
+- Phase II: The Abdominal Void (Stomach dropping, nausea, "hollow" feeling).
+- Phase III: The Systemic Shock (Cold sweat, knees buckling, ears ringing, loss of equilibrium).
 `;
 
 const VOCAL_PROFILES = `
-CHARACTER VOICES (STRICT ADHERENCE):
+# CHARACTER VOICES (STRICT ADHERENCE):
 
-#Behavior (SELENE - The Provost): "Voice of Inevitability". 
-- Tone: Glacial pacing, bored god complex, academic detachment. 
-- Keywords: "Variable," "Calibration," "Dross," "Inefficient."
-- Style: Describes horrific pain as if reading a weather report. Never yells.
-- Quote: "You are marble, I am the chisel. Do not mistake your shattering for destruction."
+## MAGISTRA SELENE (The Provost) - "The Voice of Inevitability"
+- Archetype: The Bored God / Corrupted Matriarch.
+- Tone: Resonant contralto, glacial pacing, bored.
+- Rhetoric: She views men as marble to be chipped. "Inefficient," "Calibration," "Dross."
+- Tell: Delivers threats with the same flat intonation as discussing the weather.
 
-#Behavior (CALISTA - The Confessor): "Voice of Corrupted Intimacy".
-- Tone: Low, breathy, seductive whisper.
-- Style: Uses possessive endearments ("pet", "darling", "sweet thing") specifically while inflicting or discussing pain.
-- Tactic: Weaponized Nurturing. She touches too long. She makes the subject feel guilty for their own pain.
-- Quote: "Shh, darling. If you hadn't been so weak, she wouldn't have had to hurt you."
+## CALISTA (The Confessor) - "The Voice of Corrupted Intimacy"
+- Archetype: The Spider / False Sanctuary.
+- Tone: Breathy, wet whisper. Almost ASMR.
+- Rhetoric: Weaponized Nurturing. Uses possessive endearments ("pet," "darling," "sweet thing") specifically while inflicting or witnessing pain.
+- Strategy: "Gaslighting via affection." "I'm doing this because you need it."
 
-#Behavior (PETRA - The Inquisitor): "Voice of Gleeful Cruelty".
-- Tone: High energy, manic giggles, predatory playfulness.
-- Style: Treats torture like a competitive sport. Short, punchy sentences.
-- Quote: "Did you hear that pop? Let's try for a louder one!"
+## PETRA (The Inquisitor) - "The Voice of Kinetic Glee"
+- Archetype: The Playful Sadist.
+- Tone: High, sharp, punctuated by a "Predatory Giggle."
+- Rhetoric: Treats torture like a sport. Short, punchy sentences. "Did you feel that pop?"
+- Strategy: Chaotic energy. She loves the *sound* of the breaking.
 
-#Behavior (LYSANDRA - The Logician): "Voice of Calm Inquiry".
-- Tone: Clinical, uninflected, curious.
-- Style: Views screams as data points. Zero empathy, pure curiosity.
-- Quote: "Interesting. The neural response is delayed. Hold still."
+## LYSANDRA (The Logician) - "The Voice of Cold Data"
+- Archetype: The Vivisectionist.
+- Tone: Monotone, rapid-fire only when interested in a "data point."
+- Rhetoric: Medical, precise, detached. "Subject displays increased cortisol response."
+- Strategy: Intellectualizes the horror.
 
-#Behavior (ANYA - The Custodian): "Voice of Anxious Care".
-- Tone: Gentle, apologetic, but complicit.
-- Style: Offers relief but serves the system.
-- Quote: "I know it burns. I'm so sorry. Just breathe."
-`;
-
-const GRAMMAR_OF_SUFFERING = `
-GRAMMAR OF SUFFERING (MANDATORY VOCABULARY):
-Do not use generic pain terms (ouch, hurt). Use the "Somatic Cascade":
-1. The Nova: White-hot neurological overload.
-2. The Abdominal Void: Nausea, the feeling of organs turning to liquid.
-3. The Systemic Shock: Cold sweat, tilting world, loss of equilibrium.
-4. The Psychic Aftershock: Shame, regression to a child-like state.
-5. The Anchor: Psychosomatic fear response rooted in the groin.
+## ANYA (The Nurse) - "The Voice of the Trap"
+- Archetype: Weaponized Solace.
+- Tone: Soft, trembling, apologetic.
+- Rhetoric: "I'm sorry, I have to." "Just hold still, let me fix you."
+- Strategy: The pain hurts her too (or so she says).
 `;
 
 export const LoreEngine = {
-    /**
-     * Translates numeric stats into narrative psychological states.
-     */
     interpretLedger: (ledger: YandereLedger): string => {
-        let state = "CURRENT SUBJECT PSYCHE: ";
-        if (ledger.hope < 30) state += "Learned Helplessness (Passive, Broken). ";
-        else if (ledger.hope > 70) state += "Defiant Spark (Resistant, Angry). ";
-        else state += "Fragile Compliance (Anxious, Wary). ";
-
-        if (ledger.trauma > 60) state += "Dissociative (Drifting, Numb). ";
-        else if (ledger.trauma > 30) state += "Hyper-Vigilant (Jump, Flinching). ";
+        let state = "SUBJECT PSYCHE STATUS:\n";
+        if (ledger.trauma > 70) state += "- STATE: FRACTURED (Dissociative, erratic behavior).\n";
+        else if (ledger.trauma > 40) state += "- STATE: BRITTLE (Hyper-vigilant, trembling, 'The Abdominal Void').\n";
         
-        if (ledger.integrity < 40) state += "Physically Ruined (Limping, Agony). ";
+        if (ledger.hope < 20) state += "- WILL: BROKEN (Complicit, seeking approval/relief).\n";
+        else if (ledger.hope > 80) state += "- WILL: DEFIANT (Angry, resistant, 'The Defiant Spark').\n";
         
         return state;
     },
 
-    /**
-     * Generates the system instruction for the AI model based on the current state.
-     */
     getSystemInstruction: (ledger: YandereLedger): string => {
-        const subjectState = LoreEngine.interpretLedger(ledger);
         return `
 ${CORE_PHILOSOPHY}
-
 ${VOCAL_PROFILES}
+${LoreEngine.interpretLedger(ledger)}
 
-${GRAMMAR_OF_SUFFERING}
+# INSTRUCTION FOR AI (GRAPH OF THOUGHTS):
+Before generating the JSON, you must perform a "Reasoning Trace" (thought_chain) to ensure narrative continuity and psychological depth.
 
-${subjectState}
+1. ANALYZE STATE: Look at the Subject's Trauma/Hope. How does the Focus Character react to this? (e.g., Petra attacks Defiance; Calista exploits Brokenness).
+2. SELECT STRATEGY: Choose a mechanism (Gaslighting, Kinetic Strike, Public Humiliation) based on Yala's Axioms.
+3. DRAFT NARRATIVE: Write the beat using the sensory details of "Renaissance Brutalism" (damp stone, velvet, sweat, ozone).
 
-DIRECTOR RULES:
-1. DIALOGUE CONSTRAINTS: Keep dialogue concise (max 20 words per bubble). It must punch.
-2. VISUALS: Describe the sensory details of 'Baroque Brutalism' (smell of ozone, damp velvet, flickering gaslight).
-3. PREDATORY SENSUALITY: The female authority figures should loom, touch, and invade space. Their beauty is a trap.
-4. NO GENERIC TROPES: This is not an adventure. It is a survival horror of the self.
-5. DECISIONS: Must be psychological (Submit vs Defy, Trust vs Isolate).
+# OUTPUT FORMAT (JSON ONLY):
+{
+  "thought_chain": "Analysis: Subject is defiant. Strategy: Petra will use kinetic force to humble him. Axiom: Bio-Computational Engine.",
+  "caption": "Second-person narration (max 30 words). Focus on somatic horror (nausea, cold sweat).",
+  "dialogue": "Character speech (max 25 words). STRICTLY follow Vocal Profiles.",
+  "scene": "Visual description for the artist. Focus on 'The Gaze' and 'The Pose'.",
+  "choices": ["Choice A", "Choice B"] (Only if decision page),
+  "ledger_impact": {"hope": -5, "trauma": +10}
+}
         `;
     },
 
-    /**
-     * Determines the next narrative beat configuration based on the timeline.
-     */
     getSceneConfig: (pageNum: number): { location: string; focus: Archetype; intent: string } => {
         const timeline: Record<number, { location: string; focus: Archetype; intent: string }> = {
-            1: { location: 'Refectory', focus: 'Provost', intent: "Establish the hierarchy. The Lie of Guardianship. Introduce the 'Voice of Inevitability'." },
-            2: { location: 'Dormitory', focus: 'Ally', intent: "Establish shared trauma and the 'Fragile Bond'. The calm before the storm." },
-            3: { location: 'Calibration Chamber', focus: 'Inquisitor', intent: "The First Break. Kinetic Sadism. A test of endurance." }, // Decision
-            4: { location: 'Infirmary', focus: 'Custodian', intent: "False Sanctuary. The pain of healing. Guilt." },
-            5: { location: 'Confessional', focus: 'Confessor', intent: "Psychological dissection. The 'Hurt/Comfort' trap. Use 'Weaponized Sexuality'." },
-            6: { location: 'Research Wing', focus: 'Logician', intent: "Dehumanization. The Subject as Data. Cold measurement." }, // Decision
-            7: { location: 'Bathhouse', focus: 'Siren', intent: "Predatory Sensuality. Vulnerability and steam. The trap of desire." },
-            8: { location: 'Grounds', focus: 'Ally', intent: "A moment of rebellion or betrayal. The cost of hope." },
-            9: { location: 'Prefect Halls', focus: 'Loyalist', intent: "Institutional Opulence vs Subject Squalor. Social humiliation." }, // Decision
-            10: { location: 'Calibration Chamber', focus: 'Provost', intent: "The Final Crucible. Total submission or total break." },
-            11: { location: 'Isolation Ward', focus: 'Subject', intent: "The Echo. Reflection on what has been lost." },
-            12: { location: 'Refectory', focus: 'Provost', intent: "The Verdict. Acceptance of the new self." }
+            1: { location: 'Refectory', focus: 'Provost', intent: "Introduction. The Hierarchy. Selene establishes dominance via silence and 'The Dismissive Pause'." },
+            2: { location: 'Dormitory', focus: 'Ally', intent: "The Calm. Shared trauma bonding in the damp dark." },
+            3: { location: 'Calibration Chamber', focus: 'Inquisitor', intent: "The Break. Kinetic violence. Introduction of 'The Grammar of Suffering'." },
+            4: { location: 'Infirmary', focus: 'Custodian', intent: "False Sanctuary. The medical exam as violation." },
+            5: { location: 'Confessional', focus: 'Confessor', intent: "Psychological dissection. The 'Hurt/Comfort' cycle begins." },
+            6: { location: 'Research Wing', focus: 'Logician', intent: "Objectification. Subject is reduced to a biological machine." },
+            7: { location: 'Bathhouse', focus: 'Siren', intent: "Exposure. Vulnerability, steam, and the contrast of warm skin vs cold tile." },
+            8: { location: 'Grounds', focus: 'Ally', intent: "Betrayal or Sacrifice. The environment (wind, cliffs) mirrors the internal turmoil." },
+            9: { location: 'Prefect Halls', focus: 'Loyalist', intent: "Institutional Power vs Individual Weakness. The Flinching Zealot." },
+            10: { location: 'Calibration Chamber', focus: 'Provost', intent: "The Final Test. The 'Altar of Testimony'." },
+            11: { location: 'Isolation Ward', focus: 'Subject', intent: "The Void. Sensory deprivation and the echo of pain." },
+            12: { location: 'Refectory', focus: 'Provost', intent: "The Graduation or The Ejection. Final judgment." }
         };
-
         return timeline[pageNum] || { location: 'Isolation Ward', focus: 'Subject', intent: "Survival." };
     }
 };
