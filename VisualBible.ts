@@ -19,8 +19,6 @@ const VISUAL_MANDATE = {
   
   lighting_directives: "Single gaslight source, deep shadows, volumetric fog, rim lighting on sweat/skin, extreme chiaroscuro, cavernous darkness swallowing the edges.",
 
-  mood: "predatory intimacy, suffocating dread, weaponized sexuality, clinical amusement, voyeuristic tension, power imbalance frozen mid-breath",
-
   palette: "exclusively desaturated palette: Charcoal #2B2B2B, Stone Gray #6E6E6E, Deep Umber, Blood Crimson #7C0A0A, Tarnished Gold #A77A3A."
 } as const;
 
@@ -53,7 +51,7 @@ const CHARACTER_DNA: Record<Archetype, string> = {
   // Subjects
   'Subject': "Male Subject, 21, lean swimmer’s build, dark hair plastered with sweat, green eyes wide with fear and exhaustion. Torn white shirt hanging open to waist, fabric stuck to bruised chest and abdomen, trousers riding low on hips revealing V-line and trail of dark hair, wrists bound behind back with coarse rope (rope burn detail).",
   
-  'Ally': "Male Ally, 20s, slender build, soft brown hair falling over worried eyes. Disheveled white shirt, torn and clinging to damp skin, simple dark trousers. Expression: pained, vulnerable, seeking solace.",    
+  'Ally': "Female Ally, 20s, delicate and scholarly appearance. Pale skin, dark circles under large expressive eyes, messy dark hair. Attire: Oversized, tattered white shirt slipping off one shoulder, stained with ink and grime. Expression: Anxious, intelligent, trembling but observant. A fragile intellectual broken by the system.",    
   
   'Guardian': "Darius, male Subject, 20s, broad-framed, strong build. Features hardened by pain, sweat slicking his skin. Rugged trousers, practical and worn, often stripped bare in tests. Face: grim, resolute, but signs of deep exhaustion.",
   
@@ -81,8 +79,35 @@ const LOCATION_DNA: Record<string, string> = {
 
 export const VisualBible = {
   constructPrompt: (beat: Beat, heroPresent: boolean, friendPresent: boolean): string => {
+    // We access the store via window or context if needed, but here we expect the caller to pass bio/desc if relevant.
+    // For now, we rely on the caller (App.tsx) handling the injection of user-specific details before calling this, 
+    // OR we can access the 'hero' and 'friend' objects if we passed them fully. 
+    // Ideally, App.tsx should modify CHARACTER_DNA or pass the bio string. 
+    // To keep it simple without refactoring the signature too much, we will assume standard archetypes unless overridden.
+
     const focusDNA = CHARACTER_DNA[beat.focus_char as Archetype];
     const location = LOCATION_DNA[beat.location] || LOCATION_DNA['Calibration Chamber'];
+    const mood = beat.mood || "tension";
+    const intent = beat.intent || "neutral";
+
+    // Dynamic Cinematic Driver based on Narrative Intent
+    let cinematic_driver = "Cinematic low-angle authority shot, 50mm prime f/1.4, slight Dutch tilt, foreground bokeh.";
+    let pose_driver = "Authority figure dominating foreground, Subject visible in midground.";
+
+    // Map intent to visual language (Renaissance Brutalism)
+    if (intent.includes("Break") || intent.includes("Kinetic") || mood.includes("Violence")) {
+        cinematic_driver = "Action shot, motion blur on limbs, high shutter speed, extreme Dutch tilt, debris floating in air.";
+        pose_driver = "Authority figure mid-strike or looming ominously, Subject recoiling or collapsing, muscles tensed in shock.";
+    } else if (intent.includes("Psychological") || intent.includes("Intimacy") || mood.includes("Seduction")) {
+        cinematic_driver = "Extreme close-up macro shot, focus on eyes and lips, soft focus background, suffocating proximity.";
+        pose_driver = "Authority figure invading personal space, touching Subject's face or chest, intimate but menacing gaze.";
+    } else if (intent.includes("Void") || intent.includes("Isolation")) {
+        cinematic_driver = "Wide angle 24mm, high angle looking down from ceiling, Subject dwarfed by architecture, vast negative space.";
+        pose_driver = "Subject small and isolated in center, Authority figure absent or watching from distant shadow.";
+    } else if (intent.includes("Hierarchy") || intent.includes("Power")) {
+        cinematic_driver = "Low angle hero shot of Authority, looking UP at them, imposing perspective, god-rays behind them.";
+        pose_driver = "Authority figure standing tall on dais or steps, looking down with sneer, Subject kneeling in foreground.";
+    }
 
     // ─── THE FORGE COMPOSITIONAL MATRIX ───
     return `
@@ -95,22 +120,24 @@ ${VISUAL_MANDATE.lighting_directives}
 ${VISUAL_MANDATE.palette}
 
 DIRECTIVES:
-${VISUAL_MANDATE.mood}
+Mood: ${mood}
+Intent: ${intent}
 ${VISUAL_MANDATE.character_directives}
 
-COMPOSITION:
-Cinematic low-angle authority shot, 50mm prime f/1.4, slight Dutch tilt, foreground bokeh.
+COMPOSITION & CAMERA:
+${cinematic_driver}
 Action in Scene: ${beat.scene}
 
 FOREGROUND AUTHORITY (100% identity lock):
 ${focusDNA}
+Specific Pose: ${pose_driver}
 Sweat beads on collarbone, lace texture visible at 1:1, fabric strain lines over breasts/hips.
 
-${heroPresent ? `MIDGROUND SUBJECT (Reference 1 – preserve exact face/bone structure): ${CHARACTER_DNA.Subject}
-Use uploaded reference 1 for exact facial identity` : ""}
+${heroPresent ? `MIDGROUND SUBJECT (Reference 1): ${CHARACTER_DNA.Subject}
+Use uploaded reference 1 for exact facial identity if provided.` : ""}
 
-${friendPresent ? `BACKGROUND ALLY (Reference 2 – preserve exact face/bone structure): ${CHARACTER_DNA.Ally}
-Use uploaded reference 2 for exact facial identity` : ""}
+${friendPresent ? `BACKGROUND ALLY (Reference 2): ${CHARACTER_DNA.Ally}
+Use uploaded reference 2 for exact facial identity if provided.` : ""}
 
 CAMERA NEGATIVES:
 ugly, deformed, extra limbs, blurry, low resolution, overexposed, underexposed, watermark, text, bright colors, cartoon, 3d render, flat lighting, anime

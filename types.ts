@@ -70,9 +70,10 @@ export interface Beat {
 }
 
 export interface Persona {
-  base64: string;
+  base64?: string; // Optional: If missing, we rely on bio/text description
   name: string;
   archetype: Archetype;
   coreFear?: string;
   desc?: string;
+  bio?: string; // User-defined backstory
 }

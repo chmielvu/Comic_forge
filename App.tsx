@@ -7,7 +7,7 @@
 import React, { useRef, useMemo, useCallback } from 'react';
 import { GoogleGenAI, Type } from '@google/genai';
 import jsPDF from 'jspdf';
-import { BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, GATE_PAGE, ComicFace, Beat, Archetype } from './types';
+import { BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, GATE_PAGE, ComicFace, Beat, Archetype, Persona } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
 import { SoundManager } from './SoundEngine';
@@ -49,8 +49,6 @@ const App: React.FC = () => {
   const generatingPages = useRef(new Set<number>());
 
   // --- Derived State (Memoized) ---
-  // Check if the "Gate Page" (usually page 2, where the story starts) has an image.
-  // This boolean is passed down instead of the whole array to prevent Panel re-renders.
   const isGatePageReady = useMemo(() => {
       const gatePage = comicFaces.find(f => f.pageIndex === GATE_PAGE);
       return !!(gatePage && gatePage.imageUrl && !gatePage.isLoading);
@@ -64,7 +62,6 @@ const App: React.FC = () => {
   const handleAPIError = (e: any) => {
     const msg = String(e);
     console.error("API Error:", msg);
-    // Alert removed for smoother UX, rely on console/UI fallback
   };
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -77,17 +74,21 @@ const App: React.FC = () => {
   };
 
   const generateBeat = async (pageNum: number, isDecisionPage: boolean): Promise<Beat> => {
-    // Access state directly via getState to avoid stale closures in async functions
     const state = useGameStore.getState();
     const currentHero = state.hero;
+    const currentFriend = state.friend;
     const currentLedger = state.ledger;
     const currentFaces = state.comicFaces;
 
     if (!currentHero) throw new Error("No Subject");
 
-    // Get context from LoreEngine (The Director)
     const sceneConfig = LoreEngine.getSceneConfig(pageNum);
-    const systemInstruction = LoreEngine.getSystemInstruction(currentLedger);
+    
+    // Inject Character Bios into System Instruction context
+    let contextBio = `SUBJECT: ${currentHero.bio || "A defiant student."}\n`;
+    if (currentFriend) contextBio += `ALLY: ${currentFriend.bio || "A fragile companion."}\n`;
+    
+    const systemInstruction = LoreEngine.getSystemInstruction(currentLedger) + "\n\nCHARACTER BIOS:\n" + contextBio;
 
     // Get relevant history
     const relevantHistory = currentFaces
@@ -98,7 +99,6 @@ const App: React.FC = () => {
       `[Page ${p.pageIndex}] [Location: ${p.narrative?.location}] [Focus: ${p.narrative?.focus_char}] (Action: "${p.narrative?.scene}") ${p.resolvedChoice ? `-> SUBJECT CHOICE: "${p.resolvedChoice}"` : ''}`
     ).join('\n');
 
-    // Graph of Thoughts injection
     const prompt = `
 DIRECTOR ORDER: GENERATE PAGE ${pageNum}.
 SCENE CONFIG: 
@@ -108,15 +108,14 @@ SCENE CONFIG:
 - Decision Page: ${isDecisionPage}
 
 PREVIOUS EVENTS:
-${historyText.length > 0 ? historyText : "The Subject arrives at The Forge. The air smells of salt and dread."}
+${historyText.length > 0 ? historyText : "The Subject arrives at The Forge."}
 
 EXECUTE GRAPH OF THOUGHTS:
 1. Analyze the Subject's current Ledger (Hope: ${currentLedger.hope}, Trauma: ${currentLedger.trauma}).
-2. Determine the Focus Character's strategy (e.g. Gaslighting, Kinetic Violence).
-3. Generate the Beat JSON with rich, atmospheric dialogue and detailed visual descriptions.
+2. Consider the Subject's Bio: "${currentHero.bio || 'Unknown'}".
+3. Generate the Beat JSON with rich, atmospheric dialogue.
 `;
 
-    // Strict Schema to prevent JSON errors
     const beatSchema = {
       type: Type.OBJECT,
       properties: {
@@ -149,12 +148,8 @@ EXECUTE GRAPH OF THOUGHTS:
             } 
         });
         
-        // With schema, we can safely parse the text
         const parsed = JSON.parse(res.text || "{}");
-        
         if (!isDecisionPage) parsed.choices = [];
-        
-        // Inject metadata for Visual Engine
         parsed.focus_char = sceneConfig.focus;
         parsed.location = sceneConfig.location;
         parsed.intent = sceneConfig.intent;
@@ -189,7 +184,7 @@ EXECUTE GRAPH OF THOUGHTS:
 
     const contents = [];
     
-    // Inject References
+    // Inject References - Only if base64 exists
     if (currentHero?.base64) {
         contents.push({ text: "REFERENCE 1 [SUBJECT]:" });
         contents.push({ inlineData: { mimeType: 'image/jpeg', data: currentHero.base64 } });
@@ -205,9 +200,12 @@ EXECUTE GRAPH OF THOUGHTS:
     } else if (type === 'back_cover') {
         promptText = VisualBible.getBackCoverPrompt();
     } else {
-        // Pass full Persona objects for better identity construction in VisualBible
         promptText = VisualBible.constructPrompt(beat, !!currentHero, !!currentFriend);
     }
+    
+    // Append Character Context to the visual prompt
+    if (currentHero?.bio) promptText += `\nSUBJECT CONTEXT: ${currentHero.bio}`;
+    if (currentFriend?.bio) promptText += `\nALLY CONTEXT: ${currentFriend.bio}`;
 
     contents.push({ text: promptText });
 
@@ -228,28 +226,21 @@ EXECUTE GRAPH OF THOUGHTS:
 
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type']) => {
       const isDecision = DECISION_PAGES.includes(pageNum);
-      
       let beat: Beat = { scene: "", choices: [], focus_char: 'Subject', location: 'Void' };
 
-      // 1. Generate Narrative Text First
       if (type === 'cover') {
           // Cover is visual only
       } else if (type === 'back_cover') {
           beat = { scene: "Teaser", choices: [], focus_char: 'Subject', location: 'Void' };
       } else {
-          // Pass null for history, it will be fetched from store inside generateBeat
           beat = await generateBeat(pageNum, isDecision);
       }
 
       useGameStore.getState().updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
 
-      // 2. Generate Image AND Audio in Parallel (Efficiency Boost)
       const imagePromise = generateImage(beat, type);
-      
-      // Only generate audio for story pages with actual text
       let audioPromise: Promise<string | null> = Promise.resolve(null);
       if (type === 'story' && (beat.dialogue || beat.caption)) {
-          // Prioritize dialogue for the voice acting, fallback to caption
           const textToSpeak = beat.dialogue || beat.caption || "";
           if (textToSpeak) {
               audioPromise = TTSService.generateSpeech(textToSpeak, beat.focus_char);
@@ -273,7 +264,6 @@ EXECUTE GRAPH OF THOUGHTS:
               pagesToGen.push(p);
           }
       }
-      
       if (pagesToGen.length === 0) return;
       pagesToGen.forEach(p => generatingPages.current.add(p));
 
@@ -289,8 +279,6 @@ EXECUTE GRAPH OF THOUGHTS:
       });
 
       try {
-          // Sequential generation for narrative continuity, but could be parallelized if history is pre-calculated
-          // We keep it sequential here to ensure Ledger updates correctly propagate
           for (const pageNum of pagesToGen) {
                await generateSinglePage(`page-${pageNum}`, pageNum, pageNum === BACK_COVER_PAGE ? 'back_cover' : 'story');
                generatingPages.current.delete(pageNum);
@@ -302,18 +290,16 @@ EXECUTE GRAPH OF THOUGHTS:
       }
   }
 
-  // --- Memoized Handlers to prevent re-renders in children ---
-
   const launchStory = useCallback(async (name: string, fear: string) => {
     SoundManager.init();
     SoundManager.play('success');
     if (useGameStore.getState().soundEnabled) SoundManager.startAmbience();
     
+    // Ensure hero is set with latest values from Setup
     const currentHero = useGameStore.getState().hero;
-    if (!currentHero) return;
-    
-    const updatedHero = { ...currentHero, name, coreFear: fear, archetype: 'Subject' as Archetype };
-    setHero(updatedHero);
+    if (currentHero) {
+         setHero({ ...currentHero, name, coreFear: fear });
+    }
 
     setIsTransitioning(true);
     
@@ -321,14 +307,13 @@ EXECUTE GRAPH OF THOUGHTS:
     setComicFaces([coverFace]);
     generatingPages.current.add(0);
 
-    // Initial generation sequence
     generateSinglePage('cover', 0, 'cover').finally(() => generatingPages.current.delete(0));
     
     setTimeout(async () => {
         setIsStarted(true);
         setShowSetup(false);
         setIsTransitioning(false);
-        setCurrentSheetIndex(1); // Open book
+        setCurrentSheetIndex(1);
         await generateBatch(1, INITIAL_PAGES);
         generateBatch(3, 3);
     }, 2000);
@@ -372,7 +357,15 @@ EXECUTE GRAPH OF THOUGHTS:
   const handleHeroUpload = useCallback(async (file: File) => {
        try { 
          const base64 = await fileToBase64(file); 
-         setHero({ base64, desc: "The Subject", name: "Nico", archetype: 'Subject' }); 
+         // Preserve existing fields if they exist
+         const existing = useGameStore.getState().hero;
+         setHero({ 
+             base64, 
+             desc: "The Subject", 
+             name: existing?.name || "Nico", 
+             archetype: 'Subject', 
+             bio: existing?.bio || "A defiant student." 
+         }); 
          SoundManager.play('success');
        } catch (e) { alert("Subject upload failed"); }
   }, []);
@@ -380,9 +373,26 @@ EXECUTE GRAPH OF THOUGHTS:
   const handleFriendUpload = useCallback(async (file: File) => {
        try { 
          const base64 = await fileToBase64(file); 
-         setFriend({ base64, desc: "The Ally", name: "Darius", archetype: 'Ally' }); 
+         const existing = useGameStore.getState().friend;
+         setFriend({ 
+             base64, 
+             desc: "The Ally", 
+             name: existing?.name || "Elara", 
+             archetype: 'Ally', 
+             bio: existing?.bio || "A fragile scholar who knows too much." 
+         }); 
          SoundManager.play('success');
        } catch (e) { alert("Ally upload failed"); }
+  }, []);
+
+  const handleUpdateHero = useCallback((updates: Partial<Persona>) => {
+      const current = useGameStore.getState().hero;
+      if (current) setHero({ ...current, ...updates });
+  }, []);
+
+  const handleUpdateFriend = useCallback((updates: Partial<Persona>) => {
+      const current = useGameStore.getState().friend;
+      if (current) setFriend({ ...current, ...updates });
   }, []);
 
   const handleSheetClick = useCallback((index: number) => {
@@ -426,6 +436,10 @@ EXECUTE GRAPH OF THOUGHTS:
           soundEnabled={soundEnabled}
           onHeroUpload={handleHeroUpload}
           onFriendUpload={handleFriendUpload}
+          onUpdateHero={handleUpdateHero}
+          onUpdateFriend={handleUpdateFriend}
+          setHero={setHero}
+          setFriend={setFriend}
           onLaunch={launchStory}
           onSoundChange={handleSoundToggle}
       />

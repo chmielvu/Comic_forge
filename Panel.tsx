@@ -108,7 +108,7 @@ const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDo
                 />
             )}
             
-            {/* --- AUDIO CONTROL --- */}
+            {/* --- AUDIO CONTROL (Global) --- */}
             {face?.audioBase64 && !isFullBleed && (
                 <div className="absolute top-4 right-4 z-50">
                     <button 
@@ -144,10 +144,25 @@ const PanelComponent: React.FC<PanelProps> = ({ face, onChoice, onOpenBook, onDo
                     {/* Dialogue Bubble - Dynamic Style */}
                     {narrative.dialogue && (
                         <div className="absolute bottom-32 inset-x-0 px-6 z-40 pointer-events-none flex justify-center">
-                            <div className={`${voice.container} p-4 max-w-[85%] ${voice.anim}`}>
+                            <div className={`${voice.container} p-4 max-w-[85%] ${voice.anim} relative`}>
                                 <p className={`${voice.text} text-base md:text-lg`}>
                                     "{narrative.dialogue}"
                                 </p>
+                                
+                                {/* Pulsing Audio Indicator Next to Dialogue */}
+                                {face?.audioBase64 && (
+                                    <div className="absolute -right-3 -top-3 w-6 h-6 flex items-center justify-center bg-black/80 rounded-full border border-[#d4af37] animate-pulse cursor-pointer pointer-events-auto"
+                                         onClick={(e) => {
+                                             e.stopPropagation();
+                                             if (face.audioBase64) SoundManager.playVoice(face.audioBase64);
+                                         }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
+                                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                        </svg>
+                                    </div>
+                                )}
+
                                 {/* Tail triangle */}
                                 <svg className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-6 h-4" viewBox="0 0 100 100" preserveAspectRatio="none">
                                    <path d="M0,0 L50,100 L100,0 Z" fill={voice.container.includes('bg-[#1a0505]') ? '#1a0505' : (voice.container.includes('bg-[#fff0f5]') ? '#fff0f5' : (voice.container.includes('bg-[#f0fdf4]') ? '#f0fdf4' : 'white'))} stroke={voice.container.includes('border') ? 'transparent' : 'black'} />
