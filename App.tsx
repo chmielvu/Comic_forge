@@ -7,12 +7,14 @@
 import React, { useState, useRef } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import jsPDF from 'jspdf';
-import { MAX_STORY_PAGES, BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, GENRES, TONES, LANGUAGES, ComicFace, Beat, Persona } from './types';
+import { MAX_STORY_PAGES, BACK_COVER_PAGE, TOTAL_PAGES, INITIAL_PAGES, BATCH_SIZE, DECISION_PAGES, ComicFace, Beat, Persona, YandereLedger, Archetype } from './types';
 import { Setup } from './Setup';
 import { Book } from './Book';
 import { useApiKey } from './useApiKey';
 import { ApiKeyDialog } from './ApiKeyDialog';
 import { SoundManager } from './SoundEngine';
+import { LoreEngine } from './LoreEngine';
+import { VisualBible } from './VisualBible';
 
 // --- Constants ---
 const MODEL_V3 = "gemini-3-pro-image-preview";
@@ -23,15 +25,13 @@ const App: React.FC = () => {
   // --- API Key Hook ---
   const { validateApiKey, setShowApiKeyDialog, showApiKeyDialog, handleApiKeyDialogContinue } = useApiKey();
 
-  const [hero, setHeroState] = useState<Persona | null>(null);
-  const [friend, setFriendState] = useState<Persona | null>(null);
-  const [selectedGenre, setSelectedGenre] = useState(GENRES[0]);
-  const [selectedLanguage, setSelectedLanguage] = useState(LANGUAGES[0].code);
-  const [customPremise, setCustomPremise] = useState("");
-  const [storyTone, setStoryTone] = useState(TONES[0]);
-  const [richMode, setRichMode] = useState(true);
+  const [hero, setHeroState] = useState<Persona | null>(null); // "The Subject"
+  const [friend, setFriendState] = useState<Persona | null>(null); // "The Ally"
   const [soundEnabled, setSoundEnabled] = useState(true);
   
+  // New State: The Yandere Ledger
+  const [ledger, setLedger] = useState<YandereLedger>({ hope: 50, trauma: 10, integrity: 90 });
+
   const heroRef = useRef<Persona | null>(null);
   const friendRef = useRef<Persona | null>(null);
 
@@ -50,7 +50,6 @@ const App: React.FC = () => {
   const historyRef = useRef<ComicFace[]>([]);
 
   // --- AI Helpers ---
-  // Helper to always get a fresh instance with the selected key
   const getAI = () => {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
   };
@@ -76,179 +75,118 @@ const App: React.FC = () => {
     });
   };
 
-  const generateBeat = async (history: ComicFace[], isRightPage: boolean, pageNum: number, isDecisionPage: boolean): Promise<Beat> => {
-    if (!heroRef.current) throw new Error("No Hero");
+  const generateBeat = async (history: ComicFace[], pageNum: number, isDecisionPage: boolean): Promise<Beat> => {
+    if (!heroRef.current) throw new Error("No Subject");
 
-    const isFinalPage = pageNum === MAX_STORY_PAGES;
-    const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
+    // Get context from LoreEngine (The Director)
+    const sceneConfig = LoreEngine.getSceneConfig(pageNum);
+    const systemInstruction = LoreEngine.getSystemInstruction(ledger);
 
-    // Get relevant history and last focus to prevent repetition
+    // Get relevant history
     const relevantHistory = history
         .filter(p => p.type === 'story' && p.narrative && (p.pageIndex || 0) < pageNum)
         .sort((a, b) => (a.pageIndex || 0) - (b.pageIndex || 0));
 
-    const lastBeat = relevantHistory[relevantHistory.length - 1]?.narrative;
-    const lastFocus = lastBeat?.focus_char || 'none';
-
     const historyText = relevantHistory.map(p => 
-      `[Page ${p.pageIndex}] [Focus: ${p.narrative?.focus_char}] (Caption: "${p.narrative?.caption || ''}") (Dialogue: "${p.narrative?.dialogue || ''}") (Scene: ${p.narrative?.scene}) ${p.resolvedChoice ? `-> USER CHOICE: "${p.resolvedChoice}"` : ''}`
+      `[Page ${p.pageIndex}] [Location: ${p.narrative?.location}] [Focus: ${p.narrative?.focus_char}] (Caption: "${p.narrative?.caption || ''}") (Action: "${p.narrative?.scene}") ${p.resolvedChoice ? `-> SUBJECT CHOICE: "${p.resolvedChoice}"` : ''}`
     ).join('\n');
 
-    // Aggressive Co-Star Injection Logic
-    let friendInstruction = "Not yet introduced.";
-    if (friendRef.current) {
-        friendInstruction = "ACTIVE and PRESENT (User Provided).";
-        // If the last panel wasn't the friend, strongly suggest switching to them to maintain balance.
-        if (lastFocus !== 'friend' && Math.random() > 0.4) {
-             friendInstruction += " MANDATORY: FOCUS ON THE CO-STAR FOR THIS PANEL.";
-        } else {
-             friendInstruction += " Ensure they are woven into the scene even if not the main focus.";
-        }
-    }
-
-    // Determine Core Story Driver (Genre vs Custom Premise)
-    let coreDriver = `GENRE: ${selectedGenre}. TONE: ${storyTone}.`;
-    if (selectedGenre === 'Custom') {
-        coreDriver = `STORY PREMISE: ${customPremise || "A totally unique, unpredictable adventure"}. (Follow this premise strictly over standard genre tropes).`;
-    }
-    
-    const isSliceOfLife = selectedGenre.includes("Comedy") || selectedGenre.includes("Teen") || selectedGenre.includes("Slice");
-
-    // Guardrails to prevent everything becoming "Quantum Sci-Fi"
-    const guardrails = `
-    NEGATIVE CONSTRAINTS:
-    1. UNLESS GENRE IS "Dark Sci-Fi" OR "Superhero Action" OR "Custom": DO NOT use technical jargon like "Quantum", "Timeline", "Portal", "Multiverse", or "Singularity".
-    2. IF GENRE IS "Teen Drama" OR "Lighthearted Comedy": The "stakes" must be SOCIAL, EMOTIONAL, or PERSONAL (e.g., a rumor, a competition, a broken promise, being late, embarrassing oneself). Do NOT make it life-or-death. Keep it grounded.
-    3. Avoid "The artifact" or "The device" unless established earlier.
-    `;
-
-    // BASE INSTRUCTION: Strictly enforce language for output text.
-    let instruction = `Continue the story. ALL OUTPUT TEXT (Captions, Dialogue, Choices) MUST BE IN ${langName.toUpperCase()}. ${coreDriver} ${guardrails}`;
-    if (richMode) {
-        instruction += " RICH/NOVEL MODE ENABLED. Prioritize deeper character thoughts, descriptive captions, and meaningful dialogue exchanges over short punchlines.";
-    }
-
-    if (isFinalPage) {
-        instruction += " FINAL PAGE. KARMIC CLIFFHANGER REQUIRED. You MUST explicitly reference the User's choice from PAGE 3 in the narrative and show how that specific philosophy led to this conclusion. Text must end with 'TO BE CONTINUED...' (or localized equivalent).";
-    } else if (isDecisionPage) {
-        instruction += " End with a PSYCHOLOGICAL choice about VALUES, RELATIONSHIPS, or RISK. (e.g., Truth vs. Safety, Forgive vs. Avenge). The options must NOT be simple physical actions like 'Go Left'.";
-    } else {
-        // Neutralized Narrative Arc to avoid forcing "scary mystery" tones if the genre doesn't call for it.
-        if (pageNum === 1) {
-            instruction += " INCITING INCIDENT. An event disrupts the status quo. Establish the genre's intended mood. (If Slice of Life: A social snag/surprise. If Adventure: A call to action).";
-        } else if (pageNum <= 4) {
-            instruction += " RISING ACTION. The heroes engage with the new situation. Focus on dialogue, character dynamics, and initial challenges.";
-        } else if (pageNum <= 8) {
-            instruction += " COMPLICATION. A twist occurs! A secret is revealed, a misunderstanding deepens, or the path is blocked. (Keep intensity appropriate to Genre - e.g. Social awkwardness for Comedy, Danger for Horror).";
-        } else {
-            instruction += " CLIMAX. The confrontation with the main conflict. The truth comes out, the contest ends, or the battle is fought.";
-        }
-    }
-
-    // Dynamic text limits based on richMode
-    const capLimit = richMode ? "max 35 words. Detailed narration or internal monologue" : "max 15 words";
-    const diaLimit = richMode ? "max 30 words. Rich, character-driven speech" : "max 12 words";
-
     const prompt = `
-You are writing a comic book script. PAGE ${pageNum} of ${MAX_STORY_PAGES}.
-TARGET LANGUAGE FOR TEXT: ${langName} (CRITICAL: CAPTIONS, DIALOGUE, CHOICES MUST BE IN THIS LANGUAGE).
-${coreDriver}
+DIRECTOR ORDER: GENERATE PAGE ${pageNum}.
+SCENE CONFIG: 
+- Location: ${sceneConfig.location}
+- Focus Archetype: ${sceneConfig.focus}
+- Narrative Intent: "${sceneConfig.intent}"
 
-CHARACTERS:
-- HERO: Active.
-- CO-STAR: ${friendInstruction}
+PREVIOUS EVENTS:
+${historyText.length > 0 ? historyText : "The Subject arrives at The Forge. The air smells of salt and dread."}
 
-PREVIOUS PANELS (READ CAREFULLY):
-${historyText.length > 0 ? historyText : "Start the adventure."}
+INSTRUCTIONS:
+1. Write the narrative beat. Use the "Grammar of Suffering" for any pain/trauma.
+2. DIALOGUE: Write concise, punchy dialogue (max 20 words). 
+   - If Focus is SELENE: Use the 'Voice of Inevitability' (academic, bored).
+   - If Focus is CALISTA: Use 'Weaponized Sexuality' (endearments like 'pet', 'darling' even when cruel).
+   - If Focus is PETRA: Use 'Gleeful Cruelty'.
+3. If this is a decision page (${isDecisionPage}), offer 2 psychological choices (e.g. Trust vs Isolate, Endure vs Defy).
+4. VISUAL SCENE: Describe the scene focusing on "The Gaze" and "The Pose". It should be intimate and claustrophobic.
 
-RULES:
-1. NO REPETITION. Do not use the same captions or dialogue from previous pages.
-2. IF CO-STAR IS ACTIVE, THEY MUST APPEAR FREQUENTLY.
-3. VARIETY. If page ${pageNum-1} was an action shot, make this one a reaction or wide shot.
-4. LANGUAGE: All user-facing text MUST be in ${langName}.
-5. Avoid saying "CO-star" and "hero" in the text captions. Use names if established, or generic descriptors.
-
-INSTRUCTION: ${instruction}
-
-OUTPUT STRICT JSON ONLY (No markdown formatting):
+OUTPUT JSON:
 {
-  "caption": "Unique narrator text in ${langName}. (${capLimit}).",
-  "dialogue": "Unique speech in ${langName}. (${diaLimit}). Optional.",
-  "scene": "Vivid visual description (ALWAYS IN ENGLISH for the artist model). MUST mention 'HERO' or 'CO-STAR' if they are present.",
-  "focus_char": "hero" OR "friend" OR "other",
-  "choices": ["Option A in ${langName}", "Option B in ${langName}"] (Only if decision page)
+  "caption": "Atmospheric narration (max 30 words).",
+  "dialogue": "Character speech (max 20 words).",
+  "scene": "Visual description for the artist. Focus on pose, lighting, and power dynamics.",
+  "choices": ["Choice A", "Choice B"] (Only if decision page),
+  "ledger_impact": {"hope": -5, "trauma": +10} (Estimated impact)
 }
 `;
+
     try {
         const ai = getAI();
-        const res = await ai.models.generateContent({ model: MODEL_TEXT_NAME, contents: prompt, config: { responseMimeType: 'application/json' } });
+        const res = await ai.models.generateContent({ 
+            model: MODEL_TEXT_NAME, 
+            contents: prompt, 
+            config: { 
+                responseMimeType: 'application/json',
+                systemInstruction: systemInstruction 
+            } 
+        });
+        
         let rawText = res.text || "{}";
         rawText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        
         const parsed = JSON.parse(rawText);
         
         if (parsed.dialogue) parsed.dialogue = parsed.dialogue.replace(/^[\w\s\-]+:\s*/i, '').replace(/["']/g, '').trim();
         if (parsed.caption) parsed.caption = parsed.caption.replace(/^[\w\s\-]+:\s*/i, '').trim();
         if (!isDecisionPage) parsed.choices = [];
-        if (isDecisionPage && !isFinalPage && (!parsed.choices || parsed.choices.length < 2)) parsed.choices = ["Option A", "Option B"];
-        if (!['hero', 'friend', 'other'].includes(parsed.focus_char)) parsed.focus_char = 'hero';
+        
+        // Inject metadata for Visual Engine
+        parsed.focus_char = sceneConfig.focus;
+        parsed.location = sceneConfig.location;
+        parsed.intent = sceneConfig.intent;
+
+        // Apply ledger impact
+        if (parsed.ledger_impact) {
+            setLedger(prev => ({
+                hope: Math.max(0, Math.min(100, prev.hope + (parsed.ledger_impact.hope || 0))),
+                trauma: Math.max(0, Math.min(100, prev.trauma + (parsed.ledger_impact.trauma || 0))),
+                integrity: Math.max(0, Math.min(100, prev.integrity + (parsed.ledger_impact.integrity || 0))),
+            }));
+        }
 
         return parsed as Beat;
     } catch (e) {
         console.error("Beat generation failed", e);
         handleAPIError(e);
         return { 
-            caption: pageNum === 1 ? "It began..." : "...", 
-            scene: `Generic scene for page ${pageNum}.`, 
-            focus_char: 'hero', 
+            caption: "The fog thickens...", 
+            scene: "A dark figure looms in the shadows.", 
+            focus_char: sceneConfig.focus, 
+            location: sceneConfig.location,
             choices: [] 
         };
     }
   };
 
-  const generatePersona = async (desc: string): Promise<Persona> => {
-      const style = selectedGenre === 'Custom' ? "Modern American comic book art" : `${selectedGenre} comic`;
-      try {
-          const ai = getAI();
-          const res = await ai.models.generateContent({
-              model: MODEL_IMAGE_GEN_NAME,
-              contents: { text: `STYLE: Masterpiece ${style} character sheet, detailed ink, neutral background. FULL BODY. Character: ${desc}` },
-              config: { imageConfig: { aspectRatio: '1:1' } }
-          });
-          const part = res.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
-          if (part?.inlineData?.data) return { base64: part.inlineData.data, desc };
-          throw new Error("Failed");
-      } catch (e) { 
-        handleAPIError(e);
-        throw e; 
-      }
-  };
-
   const generateImage = async (beat: Beat, type: ComicFace['type']): Promise<string> => {
     const contents = [];
+    
+    // Inject References
     if (heroRef.current?.base64) {
-        contents.push({ text: "REFERENCE 1 [HERO]:" });
+        contents.push({ text: "REFERENCE 1 [SUBJECT]:" });
         contents.push({ inlineData: { mimeType: 'image/jpeg', data: heroRef.current.base64 } });
     }
     if (friendRef.current?.base64) {
-        contents.push({ text: "REFERENCE 2 [CO-STAR]:" });
+        contents.push({ text: "REFERENCE 2 [ALLY]:" });
         contents.push({ inlineData: { mimeType: 'image/jpeg', data: friendRef.current.base64 } });
     }
 
-    const styleEra = selectedGenre === 'Custom' ? "Modern American" : selectedGenre;
-    let promptText = `STYLE: ${styleEra} comic book art, detailed ink, vibrant colors. `;
-    
+    let promptText = "";
     if (type === 'cover') {
-        const langName = LANGUAGES.find(l => l.code === selectedLanguage)?.name || "English";
-        promptText += `TYPE: Comic Book Cover. TITLE: "INFINITE HEROES" (OR LOCALIZED TRANSLATION IN ${langName.toUpperCase()}). Main visual: Dynamic action shot of [HERO] (Use REFERENCE 1).`;
+        promptText = VisualBible.getCoverPrompt();
     } else if (type === 'back_cover') {
-        promptText += `TYPE: Comic Back Cover. FULL PAGE VERTICAL ART. Dramatic teaser. Text: "NEXT ISSUE SOON".`;
+        promptText = VisualBible.getBackCoverPrompt();
     } else {
-        promptText += `TYPE: Vertical comic panel. SCENE: ${beat.scene}. `;
-        promptText += `INSTRUCTIONS: Maintain strict character likeness. If scene mentions 'HERO', you MUST use REFERENCE 1. If scene mentions 'CO-STAR' or 'SIDEKICK', you MUST use REFERENCE 2.`;
-        
-        if (beat.caption) promptText += ` INCLUDE CAPTION BOX: "${beat.caption}"`;
-        if (beat.dialogue) promptText += ` INCLUDE SPEECH BUBBLE: "${beat.dialogue}"`;
+        promptText = VisualBible.constructPrompt(beat, heroRef.current!, friendRef.current);
     }
 
     contents.push({ text: promptText });
@@ -276,21 +214,15 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
 
   const generateSinglePage = async (faceId: string, pageNum: number, type: ComicFace['type']) => {
       const isDecision = DECISION_PAGES.includes(pageNum);
-      let beat: Beat = { scene: "", choices: [], focus_char: 'other' };
+      
+      let beat: Beat = { scene: "", choices: [], focus_char: 'Subject', location: 'Void' };
 
       if (type === 'cover') {
-           // Cover beat is handled in generateImage
+          // Cover is visual only
       } else if (type === 'back_cover') {
-           beat = { scene: "Thematic teaser image", choices: [], focus_char: 'other' };
+          beat = { scene: "Teaser", choices: [], focus_char: 'Subject', location: 'Void' };
       } else {
-           beat = await generateBeat(historyRef.current, pageNum % 2 === 0, pageNum, isDecision);
-      }
-
-      if (beat.focus_char === 'friend' && !friendRef.current && type === 'story') {
-          try {
-              const newSidekick = await generatePersona(selectedGenre === 'Custom' ? "A fitting sidekick for this story" : `Sidekick for ${selectedGenre} story.`);
-              setFriend(newSidekick);
-          } catch (e) { beat.focus_char = 'other'; }
+          beat = await generateBeat(historyRef.current, pageNum, isDecision);
       }
 
       updateFaceState(faceId, { narrative: beat, choices: beat.choices, isDecisionPage: isDecision });
@@ -334,31 +266,20 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       }
   }
 
-  const launchStory = async () => {
-    // Initialize sound on user interaction
+  const launchStory = async (name: string, fear: string) => {
     SoundManager.init();
     SoundManager.play('success');
 
-    // --- API KEY VALIDATION ---
     const hasKey = await validateApiKey();
-    if (!hasKey) return; // Stop if cancelled or invalid
+    if (!hasKey) return;
     
     if (!heroRef.current) return;
-    if (selectedGenre === 'Custom' && !customPremise.trim()) {
-        alert("Please enter a custom story premise.");
-        return;
-    }
+    
+    const updatedHero = { ...heroRef.current, name, coreFear: fear, archetype: 'Subject' as Archetype };
+    setHero(updatedHero);
+
     setIsTransitioning(true);
     
-    let availableTones = TONES;
-    if (selectedGenre === "Teen Drama / Slice of Life" || selectedGenre === "Lighthearted Comedy") {
-        availableTones = TONES.filter(t => t.includes("CASUAL") || t.includes("WHOLESOME") || t.includes("QUIPPY"));
-    } else if (selectedGenre === "Classic Horror") {
-        availableTones = TONES.filter(t => t.includes("INNER-MONOLOGUE") || t.includes("OPERATIC"));
-    }
-    
-    setStoryTone(availableTones[Math.floor(Math.random() * availableTones.length)]);
-
     const coverFace: ComicFace = { id: 'cover', type: 'cover', choices: [], isLoading: true, pageIndex: 0 };
     setComicFaces([coverFace]);
     historyRef.current = [coverFace];
@@ -372,7 +293,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         setIsTransitioning(false);
         await generateBatch(1, INITIAL_PAGES);
         generateBatch(3, 3);
-    }, 1100);
+    }, 2000);
   };
 
   const handleChoice = async (pageIndex: number, choice: string) => {
@@ -394,6 +315,7 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
       generatingPages.current.clear();
       setHero(null);
       setFriend(null);
+      setLedger({ hope: 50, trauma: 10, integrity: 90 });
   };
 
   const downloadPDF = () => {
@@ -407,22 +329,22 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
         if (index > 0) doc.addPage([PAGE_WIDTH, PAGE_HEIGHT], 'portrait');
         if (face.imageUrl) doc.addImage(face.imageUrl, 'JPEG', 0, 0, PAGE_WIDTH, PAGE_HEIGHT);
     });
-    doc.save('Infinite-Heroes-Issue.pdf');
+    doc.save('The-Forges-Loom.pdf');
   };
 
   const handleHeroUpload = async (file: File) => {
        try { 
          const base64 = await fileToBase64(file); 
-         setHero({ base64, desc: "The Main Hero" }); 
+         setHero({ base64, desc: "The Subject", name: "Nico", archetype: 'Subject' }); 
          SoundManager.play('success');
-       } catch (e) { alert("Hero upload failed"); }
+       } catch (e) { alert("Subject upload failed"); }
   };
   const handleFriendUpload = async (file: File) => {
        try { 
          const base64 = await fileToBase64(file); 
-         setFriend({ base64, desc: "The Sidekick/Rival" }); 
+         setFriend({ base64, desc: "The Ally", name: "Darius", archetype: 'Ally' }); 
          SoundManager.play('success');
-       } catch (e) { alert("Friend upload failed"); }
+       } catch (e) { alert("Ally upload failed"); }
   };
 
   const handleSheetClick = (index: number) => {
@@ -454,19 +376,11 @@ OUTPUT STRICT JSON ONLY (No markdown formatting):
           isTransitioning={isTransitioning}
           hero={hero}
           friend={friend}
-          selectedGenre={selectedGenre}
-          selectedLanguage={selectedLanguage}
-          customPremise={customPremise}
-          richMode={richMode}
           soundEnabled={soundEnabled}
           onHeroUpload={handleHeroUpload}
           onFriendUpload={handleFriendUpload}
-          onGenreChange={setSelectedGenre}
-          onLanguageChange={setSelectedLanguage}
-          onPremiseChange={setCustomPremise}
-          onRichModeChange={setRichMode}
-          onSoundChange={handleSoundToggle}
           onLaunch={launchStory}
+          onSoundChange={handleSoundToggle}
       />
       
       <Book 

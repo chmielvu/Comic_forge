@@ -1,43 +1,47 @@
+
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
 */
 
-export const MAX_STORY_PAGES = 10;
-export const BACK_COVER_PAGE = 11;
-export const TOTAL_PAGES = 11;
+export const MAX_STORY_PAGES = 12;
+export const BACK_COVER_PAGE = 13;
+export const TOTAL_PAGES = 13;
 export const INITIAL_PAGES = 2;
 export const GATE_PAGE = 2;
 export const BATCH_SIZE = 6;
-export const DECISION_PAGES = [3];
+export const DECISION_PAGES = [3, 6, 9];
 
-export const GENRES = ["Classic Horror", "Superhero Action", "Dark Sci-Fi", "High Fantasy", "Neon Noir Detective", "Wasteland Apocalypse", "Lighthearted Comedy", "Teen Drama / Slice of Life", "Custom"];
-export const TONES = [
-    "ACTION-HEAVY (Short, punchy dialogue. Focus on kinetics.)",
-    "INNER-MONOLOGUE (Heavy captions revealing thoughts.)",
-    "QUIPPY (Characters use humor as a defense mechanism.)",
-    "OPERATIC (Grand, dramatic declarations and high stakes.)",
-    "CASUAL (Natural dialogue, focus on relationships/gossip.)",
-    "WHOLESOME (Warm, gentle, optimistic.)"
-];
+export type StatKey = 'hope' | 'trauma' | 'integrity';
 
-export const LANGUAGES = [
-    { code: 'en-US', name: 'English (US)' },
-    { code: 'ar-EG', name: 'Arabic (Egypt)' },
-    { code: 'de-DE', name: 'German (Germany)' },
-    { code: 'es-MX', name: 'Spanish (Mexico)' },
-    { code: 'fr-FR', name: 'French (France)' },
-    { code: 'hi-IN', name: 'Hindi (India)' },
-    { code: 'id-ID', name: 'Indonesian (Indonesia)' },
-    { code: 'it-IT', name: 'Italian (Italy)' },
-    { code: 'ja-JP', name: 'Japanese (Japan)' },
-    { code: 'ko-KR', name: 'Korean (South Korea)' },
-    { code: 'pt-BR', name: 'Portuguese (Brazil)' },
-    { code: 'ru-RU', name: 'Russian (Russia)' },
-    { code: 'ua-UA', name: 'Ukrainian (Ukraine)' },
-    { code: 'vi-VN', name: 'Vietnamese (Vietnam)' },
-    { code: 'zh-CN', name: 'Chinese (China)' }
-];
+export interface YandereLedger {
+  hope: number;      // 0-100: Will to resist vs Learned Helplessness
+  trauma: number;    // 0-100: Fragmentation of self
+  integrity: number; // 0-100: Physical endurance
+}
+
+// Expanded Archetypes based on Narrative Bible 5.0
+export type Archetype = 
+  // Faculty
+  | 'Provost' 
+  | 'Inquisitor' 
+  | 'Confessor' 
+  | 'Logician' 
+  | 'Custodian' 
+  | 'Veteran'
+  // Prefects
+  | 'Loyalist'
+  | 'Pragmatist'
+  | 'Siren'
+  | 'Dissident'
+  // Subjects
+  | 'Subject' // The Player/Newcomer
+  | 'Ally'    // The Fragile Bond
+  | 'Guardian'
+  | 'Archivist'
+  | 'Ghost'
+  | 'Jester'
+  | 'Penitent';
 
 export interface ComicFace {
   id: string;
@@ -56,10 +60,17 @@ export interface Beat {
   dialogue?: string;
   scene: string;
   choices: string[];
-  focus_char: 'hero' | 'friend' | 'other';
+  focus_char: Archetype;
+  location: string;
+  mood?: string;
+  intent?: string; // The Director's goal for this beat (e.g. "Break Spirit")
+  ledger_impact?: Partial<YandereLedger>;
 }
 
 export interface Persona {
   base64: string;
-  desc: string;
+  name: string;
+  archetype: Archetype;
+  coreFear?: string;
+  desc?: string;
 }
